@@ -26,9 +26,9 @@ namespace :build do
     Section: utils
     Priority: optional
     Architecture: #{ARCH}
-    Maintainer: YAAA Developer <dev@yaaa.local>
-    Description: YAAA Terminal Application
-     A modern terminal application built with Rust and egui.
+    Maintainer: Oleg Orlov <orelcokolov@gmail.com>
+    Description: YAAA - Yet Another AI Agent
+     A terminal manager to manage console AI Agents by folders.
   CONTROL
 
   File.write("#{control_dir}/control", control_content)
