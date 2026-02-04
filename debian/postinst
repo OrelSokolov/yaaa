@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+# Update icon caches after installation
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ]; then
+    update-icon-caches /usr/share/icons/hicolor 2>/dev/null || true
+fi
+
+# Handle desktop database
+if [ "$1" = "configure" ]; then
+    update-desktop-database /usr/share/applications 2>/dev/null || true
+fi
+
+exit 0

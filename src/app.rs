@@ -140,6 +140,7 @@ impl eframe::App for App {
         egui::SidePanel::left("left_panel")
             .default_width(180.0)
             .show(ctx, |ui| {
+                ui.style_mut().spacing.interact_size = egui::vec2(140.0, 32.0);
                 ui.style_mut()
                     .text_styles
                     .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
@@ -193,8 +194,10 @@ impl eframe::App for App {
                         let is_active = active_tab_id == Some(*tab_id);
 
                         ui.horizontal(|ui| {
-                            ui.add_space(10.0);
-                            if ui.selectable_label(is_active, tab_name).clicked() {
+                            let width = ui.available_width() * 0.9;
+                            let label = egui::SelectableLabel::new(is_active, tab_name)
+                                .min_size(egui::vec2(width, 0.0));
+                            if ui.add(label).clicked() {
                                 group_actions.push((
                                     *group_id,
                                     String::from("select_tab"),
@@ -202,7 +205,7 @@ impl eframe::App for App {
                                 ));
                             }
 
-                            if ui.small_button("×").clicked() {
+                            if ui.add(egui::Button::new("x").min_size(egui::vec2(30.0, 0.0))).clicked() {
                                 group_actions.push((
                                     *group_id,
                                     String::from("remove_tab"),
@@ -213,8 +216,10 @@ impl eframe::App for App {
                     }
 
                     ui.horizontal(|ui| {
-                        ui.add_space(10.0);
-                        if ui.small_button("+ Add").clicked() {
+                        if ui
+                            .add(egui::Button::new("+ Add").min_size(egui::vec2(0.0, 16.0)))
+                            .clicked()
+                        {
                             add_tab_to_group = Some(*group_id);
                         }
                     });
