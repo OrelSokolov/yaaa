@@ -285,6 +285,13 @@ impl eframe::App for App {
                             .set_focus(!self.show_rename_group)
                             .set_size(ui.available_size());
 
+                        // Если терминал только что создан (через хоткей Ctrl+Shift+N),
+                        // блокируем ввод на один кадр, чтобы символ ^N не попал в PTY
+                        if tab.just_created {
+                            terminal.block_input_until_next_frame();
+                            tab.just_created = false;
+                        }
+
                         terminal.render(ui, 0.0);
 
                         let inner_rect = ui.min_rect();
@@ -652,6 +659,9 @@ struct Tab {
     title: String,
     last_line_count: usize,
     user_scrolled_up: bool,
+    // Блокирует ввод в терминале на один кадр после создания, чтобы предотвратить
+    // попадание символов хоткея (например, ^N от Ctrl+N) в только что созданный терминал
+    just_created: bool,
 }
 
 impl Tab {
@@ -683,6 +693,9 @@ impl Tab {
             title: format!("tab: {}", id),
             last_line_count: 0,
             user_scrolled_up: false,
+            // Устанавливаем true, чтобы заблокировать ввод на первый кадр
+            // и предотвратить попадание символов хоткея в терминал
+            just_created: true,
         }
     }
 
