@@ -1,3 +1,4 @@
+use egui::{Pos2, Rect};
 use egui_term::{PtyEvent, TerminalBackend, TerminalView};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -272,7 +273,7 @@ impl eframe::App for App {
                 let cell_height = content.terminal_size.cell_height as f32;
                 let scrollable_height = (total_lines as f32) * cell_height;
 
-                let scroll_response = egui::ScrollArea::vertical()
+                let _scroll_response = egui::ScrollArea::vertical()
                     .id_salt(("terminal", tab.backend.id()))
                     .auto_shrink([false; 2])
                     .show(ui, |ui| {
@@ -282,19 +283,22 @@ impl eframe::App for App {
                             .set_size(ui.available_size());
 
                         terminal.render(ui, 0.0);
+
+                        let inner_rect = ui.min_rect();
+                        let viewport_bottom = ui.max_rect().bottom();
+                        let content_bottom = inner_rect.bottom();
+                        let is_at_bottom = content_bottom - viewport_bottom < 10.0;
+
+                        if total_lines > tab.last_line_count && !tab.user_scrolled_up {
+                            let target_rect = Rect::from_min_max(
+                                Pos2::new(inner_rect.left(), content_bottom - 1000.0),
+                                Pos2::new(inner_rect.right(), content_bottom + 1000.0),
+                            );
+                            ui.scroll_to_rect(target_rect, Some(egui::Align::BOTTOM));
+                        } else if !is_at_bottom {
+                            tab.user_scrolled_up = true;
+                        }
                     });
-
-                let viewport_height = ui.available_rect_before_wrap().height();
-                let max_scroll = (scrollable_height - viewport_height).max(0.0);
-                let current_offset = scroll_response.state.offset.y;
-                let is_at_bottom = max_scroll - current_offset < 10.0;
-
-                if total_lines > tab.last_line_count && !tab.user_scrolled_up {
-                    ui.scroll_to_cursor(Some(egui::Align::BOTTOM));
-                }
-                if !is_at_bottom {
-                    tab.user_scrolled_up = true;
-                }
 
                 tab.last_line_count = total_lines;
             } else {
