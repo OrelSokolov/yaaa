@@ -266,11 +266,37 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(tab) = self.tab_manager.get_active() {
-                let terminal = TerminalView::new(ui, &mut tab.backend)
-                    .set_focus(!self.show_rename_group)
-                    .set_size(ui.available_size());
+                let content = tab.backend.last_content();
+                let display_offset = tab.backend.display_offset();
+                let total_lines = tab.backend.total_lines() + display_offset;
+                let cell_height = content.terminal_size.cell_height as f32;
+                let scrollable_height = (total_lines as f32) * cell_height;
 
-                ui.add(terminal);
+                let scroll_response = egui::ScrollArea::vertical()
+                    .id_salt(("terminal", tab.backend.id()))
+                    .auto_shrink([false; 2])
+                    .show(ui, |ui| {
+                        ui.set_min_height(scrollable_height);
+                        let mut terminal = TerminalView::new(ui, &mut tab.backend)
+                            .set_focus(!self.show_rename_group)
+                            .set_size(ui.available_size());
+
+                        terminal.render(ui, 0.0);
+                    });
+
+                let viewport_height = ui.available_rect_before_wrap().height();
+                let max_scroll = (scrollable_height - viewport_height).max(0.0);
+                let current_offset = scroll_response.state.offset.y;
+                let is_at_bottom = max_scroll - current_offset < 10.0;
+
+                if total_lines > tab.last_line_count && !tab.user_scrolled_up {
+                    ui.scroll_to_cursor(Some(egui::Align::BOTTOM));
+                }
+                if !is_at_bottom {
+                    tab.user_scrolled_up = true;
+                }
+
+                tab.last_line_count = total_lines;
             } else {
                 ui.centered_and_justified(|ui| {
                     ui.label("No active tab. Select a group and add a tab.");
@@ -305,7 +331,21 @@ impl TabManager {
         if let Some(groups_data) = manager.load_groups() {
             for group in groups_data {
                 manager.next_group_id = manager.next_group_id.max(group.id + 1);
+                for &tab_id in &group.tab_ids {
+                    manager.next_tab_id = manager.next_tab_id.max(tab_id + 1);
+                    let tab = Tab::new(
+                        cc.egui_ctx.clone(),
+                        manager.command_sender.clone(),
+                        tab_id,
+                        Some(group.path.clone()),
+                    );
+                    manager.tabs.insert(tab_id, tab);
+                }
                 manager.groups.insert(group.id, group);
+            }
+            if let Some(first_group) = manager.groups.first_key_value() {
+                manager.active_group_id = Some(*first_group.0);
+                manager.active_tab_id = first_group.1.tab_ids.first().copied();
             }
         }
 
@@ -510,6 +550,49 @@ impl TabManager {
 
         for (i, tab_id) in all_ids.iter().enumerate() {
             if *tab_id == id {
+                let base_name = format!("Tab{}", i + 1);
+                return self.get_unique_name(&base_name, id);
+            }
+        }
+
+        format!("Tab{}", id + 1)
+    }
+
+    fn get_unique_name(&self, base_name: &str, current_tab_id: u64) -> String {
+        let mut name = base_name.to_string();
+        let mut counter = 1;
+
+        let all_tabs: Vec<(u64, String)> = self
+            .groups
+            .values()
+            .flat_map(|g| {
+                g.tab_ids
+                    .iter()
+                    .map(move |&tab_id| (tab_id, self.get_tab_name_by_id(tab_id)))
+            })
+            .collect();
+
+        while all_tabs
+            .iter()
+            .any(|(tab_id, n)| *tab_id != current_tab_id && *n == name)
+        {
+            name = format!("{}{}", base_name, counter);
+            counter += 1;
+        }
+
+        name
+    }
+
+    fn get_tab_name_by_id(&self, id: u64) -> String {
+        let all_ids: Vec<u64> = self
+            .groups
+            .values()
+            .flat_map(|g| g.tab_ids.iter())
+            .copied()
+            .collect();
+
+        for (i, tab_id) in all_ids.iter().enumerate() {
+            if *tab_id == id {
                 return format!("Tab{}", i + 1);
             }
         }
@@ -558,6 +641,8 @@ impl TabGroup {
 struct Tab {
     backend: TerminalBackend,
     title: String,
+    last_line_count: usize,
+    user_scrolled_up: bool,
 }
 
 impl Tab {
@@ -587,6 +672,8 @@ impl Tab {
         Self {
             backend,
             title: format!("tab: {}", id),
+            last_line_count: 0,
+            user_scrolled_up: false,
         }
     }
 
