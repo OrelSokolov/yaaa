@@ -1213,10 +1213,10 @@ dependencies = [
 [[package]]
 name = "egui_term"
 version = "0.1.0"
+source = "git+https://github.com/Harzu/egui_term#91b03bcdaed5d15e6fa00259d30355fe4eddcdb8"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
- "arboard",
  "egui",
  "open",
 ]
@@ -4922,6 +4922,7 @@ dependencies = [
 name = "yaaa"
 version = "0.1.1"
 dependencies = [
+ "alacritty_terminal",
  "cargo-deb",
  "dirs",
  "eframe",

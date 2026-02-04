@@ -1,5 +1,6 @@
-use egui::{Pos2, Rect};
-use egui_term::{PtyEvent, TerminalBackend, TerminalView};
+use alacritty_terminal::grid::Dimensions;
+use egui::Rect;
+use egui_term::{PtyEvent, TerminalBackend, TerminalMode, TerminalView};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -8,6 +9,49 @@ use std::{
 };
 
 const GROUPS_FILE: &str = "groups.json";
+
+trait TerminalBackendExt {
+    fn display_offset(&self) -> usize;
+    fn total_lines(&self) -> usize;
+}
+
+impl TerminalBackendExt for TerminalBackend {
+    fn display_offset(&self) -> usize {
+        self.last_content().grid.display_offset()
+    }
+
+    fn total_lines(&self) -> usize {
+        self.last_content().grid.total_lines()
+    }
+}
+
+#[derive(Default)]
+struct ScrollState {
+    last_line_count: usize,
+    user_scrolled_up: bool,
+}
+
+impl ScrollState {
+    fn detect_clear(&self, current_lines: usize) -> bool {
+        self.last_line_count > 0 && (current_lines as f64) < (self.last_line_count as f64) * 0.1
+    }
+}
+
+#[derive(Default)]
+struct TabScrollState {
+    normal: ScrollState,
+    alternate: ScrollState,
+}
+
+impl TabScrollState {
+    fn current(&mut self, is_alternate: bool) -> &mut ScrollState {
+        if is_alternate {
+            &mut self.alternate
+        } else {
+            &mut self.normal
+        }
+    }
+}
 
 pub struct App {
     command_sender: Sender<(u64, egui_term::PtyEvent)>,
@@ -138,13 +182,13 @@ impl eframe::App for App {
         let mut group_actions: Vec<(u64, String, Vec<(u64, bool)>)> = Vec::new();
 
         egui::SidePanel::left("left_panel")
-            .default_width(180.0)
+            .default_width(140.0)
             .show(ctx, |ui| {
-                ui.style_mut().spacing.interact_size = egui::vec2(140.0, 32.0);
+                ui.style_mut().spacing.interact_size = egui::vec2(120.0, 24.0);
                 ui.style_mut()
                     .text_styles
                     .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
-                if ui.button("+ Add group").clicked() {
+                if ui.button("➕ Add group").clicked() {
                     add_group_clicked = true;
                 }
 
@@ -195,7 +239,7 @@ impl eframe::App for App {
 
                         ui.horizontal(|ui| {
                             let width = ui.available_width() * 0.9;
-                            let label = egui::SelectableLabel::new(is_active, tab_name)
+                            let label = egui::Button::selectable(is_active, tab_name)
                                 .min_size(egui::vec2(width, 0.0));
                             if ui.add(label).clicked() {
                                 group_actions.push((
@@ -205,7 +249,10 @@ impl eframe::App for App {
                                 ));
                             }
 
-                            if ui.add(egui::Button::new("x").min_size(egui::vec2(30.0, 0.0))).clicked() {
+                            if ui
+                                .add(egui::Button::new("🗙").min_size(egui::vec2(30.0, 0.0)))
+                                .clicked()
+                            {
                                 group_actions.push((
                                     *group_id,
                                     String::from("remove_tab"),
@@ -217,7 +264,7 @@ impl eframe::App for App {
 
                     ui.horizontal(|ui| {
                         if ui
-                            .add(egui::Button::new("+ Add").min_size(egui::vec2(0.0, 16.0)))
+                            .add(egui::Button::new("➕ Add").min_size(egui::vec2(0.0, 16.0)))
                             .clicked()
                         {
                             add_tab_to_group = Some(*group_id);
@@ -273,51 +320,63 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(tab) = self.tab_manager.get_active() {
                 let content = tab.backend.last_content();
-                let display_offset = tab.backend.display_offset();
-                let total_lines = tab.backend.total_lines() + display_offset;
+                let is_alternate = content.terminal_mode.contains(TerminalMode::ALT_SCREEN);
+                let total_lines = tab.backend.total_lines();
                 let cell_height = content.terminal_size.cell_height as f32;
                 let content_height = (total_lines as f32) * cell_height;
                 let viewport_height = ui.available_height();
 
-                let _scroll_response = egui::ScrollArea::vertical()
+                let mode_switched = tab.was_alternate_last_frame != is_alternate;
+                let terminal_cleared =
+                    !is_alternate && tab.scroll_state.normal.detect_clear(total_lines);
+
+                if terminal_cleared || mode_switched {
+                    let state = tab.scroll_state.current(is_alternate);
+                    state.last_line_count = total_lines;
+                    state.user_scrolled_up = false;
+                }
+
+                let scroll_state = tab.scroll_state.current(is_alternate);
+
+                egui::ScrollArea::vertical()
                     .id_salt(("terminal", tab.backend.id()))
                     .max_height(f32::INFINITY)
                     .show(ui, |ui| {
                         let height = content_height.max(viewport_height);
                         ui.set_min_height(height);
 
-                        let mut terminal = TerminalView::new(ui, &mut tab.backend)
-                            .set_focus(!self.show_rename_group)
+                        let should_block_input = tab.just_created;
+                        let terminal = TerminalView::new(ui, &mut tab.backend)
+                            .set_focus(!self.show_rename_group && !should_block_input)
                             .set_size(ui.available_size());
 
-                        // Если терминал только что создан (через хоткей Ctrl+Shift+N),
-                        // блокируем ввод на один кадр, чтобы символ ^N не попал в PTY
+                        ui.add(terminal);
+
                         if tab.just_created {
-                            terminal.block_input_until_next_frame();
                             tab.just_created = false;
                         }
-
-                        terminal.render(ui, 0.0);
 
                         let inner_rect = ui.min_rect();
                         let viewport_bottom = ui.max_rect().bottom();
                         let content_bottom = inner_rect.bottom();
                         let is_at_bottom = content_bottom - viewport_bottom < 10.0;
 
-                        if total_lines > tab.last_line_count && !tab.user_scrolled_up {
-                            let target_rect = Rect::from_min_max(
-                                Pos2::new(inner_rect.left(), content_bottom - 1000.0),
-                                Pos2::new(inner_rect.right(), content_bottom + 1000.0),
+                        if total_lines > scroll_state.last_line_count
+                            && !scroll_state.user_scrolled_up
+                        {
+                            ui.scroll_to_rect(
+                                Rect::from_min_max(inner_rect.min, inner_rect.max),
+                                Some(egui::Align::BOTTOM),
                             );
-                            ui.scroll_to_rect(target_rect, Some(egui::Align::BOTTOM));
                         } else if !is_at_bottom {
-                            tab.user_scrolled_up = true;
-                        } else if total_lines < tab.last_line_count {
-                            tab.user_scrolled_up = false;
+                            scroll_state.user_scrolled_up = true;
+                        } else if total_lines < scroll_state.last_line_count {
+                            scroll_state.user_scrolled_up = false;
                         }
                     });
 
-                tab.last_line_count = total_lines;
+                tab.was_alternate_last_frame = is_alternate;
+                scroll_state.last_line_count = total_lines;
             } else {
                 ui.centered_and_justified(|ui| {
                     ui.label("No active tab. Select a group and add a tab.");
@@ -525,6 +584,11 @@ impl TabManager {
                 break;
             }
         }
+
+        if let Some(tab) = self.tabs.get_mut(&id) {
+            let is_alternate = tab.is_alternate_screen();
+            tab.scroll_state.current(is_alternate).user_scrolled_up = false;
+        }
     }
 
     fn switch_to_next_tab(&mut self) {
@@ -536,7 +600,12 @@ impl TabManager {
                     .position(|&id| Some(id) == self.active_tab_id)
                 {
                     let next_idx = (current_idx + 1) % tab_ids.len();
-                    self.active_tab_id = Some(tab_ids[next_idx]);
+                    let new_tab_id = tab_ids[next_idx];
+                    self.active_tab_id = Some(new_tab_id);
+                    if let Some(tab) = self.tabs.get_mut(&new_tab_id) {
+                        let is_alternate = tab.is_alternate_screen();
+                        tab.scroll_state.current(is_alternate).user_scrolled_up = false;
+                    }
                 }
             }
         }
@@ -555,7 +624,12 @@ impl TabManager {
                     } else {
                         current_idx - 1
                     };
-                    self.active_tab_id = Some(tab_ids[prev_idx]);
+                    let new_tab_id = tab_ids[prev_idx];
+                    self.active_tab_id = Some(new_tab_id);
+                    if let Some(tab) = self.tabs.get_mut(&new_tab_id) {
+                        let is_alternate = tab.is_alternate_screen();
+                        tab.scroll_state.current(is_alternate).user_scrolled_up = false;
+                    }
                 }
             }
         }
@@ -626,7 +700,7 @@ impl TabManager {
     }
 
     fn get_active(&mut self) -> Option<&mut Tab> {
-        let group_id = self.active_group_id?;
+        let _group_id = self.active_group_id?;
         let tab_id = self.active_tab_id?;
 
         self.tabs.get_mut(&tab_id)
@@ -662,11 +736,18 @@ impl TabGroup {
 struct Tab {
     backend: TerminalBackend,
     title: String,
-    last_line_count: usize,
-    user_scrolled_up: bool,
-    // Блокирует ввод в терминале на один кадр после создания, чтобы предотвратить
-    // попадание символов хоткея (например, ^N от Ctrl+N) в только что созданный терминал
+    scroll_state: TabScrollState,
+    was_alternate_last_frame: bool,
     just_created: bool,
+}
+
+impl Tab {
+    fn is_alternate_screen(&self) -> bool {
+        self.backend
+            .last_content()
+            .terminal_mode
+            .contains(TerminalMode::ALT_SCREEN)
+    }
 }
 
 impl Tab {
@@ -696,10 +777,8 @@ impl Tab {
         Self {
             backend,
             title: format!("tab: {}", id),
-            last_line_count: 0,
-            user_scrolled_up: false,
-            // Устанавливаем true, чтобы заблокировать ввод на первый кадр
-            // и предотвратить попадание символов хоткея в терминал
+            scroll_state: TabScrollState::default(),
+            was_alternate_last_frame: false,
             just_created: true,
         }
     }
