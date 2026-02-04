@@ -1,7 +1,8 @@
 [package]
-name = "tabs"
+name = "yaaa"
 version = "0.1.0"
 edition = "2021"
+description = "Multi-Agent Terminal - Yet Another AI Agent"
 
 [dependencies]
 egui = "0.33"

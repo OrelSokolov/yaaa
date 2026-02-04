@@ -271,13 +271,16 @@ impl eframe::App for App {
                 let display_offset = tab.backend.display_offset();
                 let total_lines = tab.backend.total_lines() + display_offset;
                 let cell_height = content.terminal_size.cell_height as f32;
-                let scrollable_height = (total_lines as f32) * cell_height;
+                let content_height = (total_lines as f32) * cell_height;
+                let viewport_height = ui.available_height();
 
                 let _scroll_response = egui::ScrollArea::vertical()
                     .id_salt(("terminal", tab.backend.id()))
-                    .auto_shrink([false; 2])
+                    .max_height(f32::INFINITY)
                     .show(ui, |ui| {
-                        ui.set_min_height(scrollable_height);
+                        let height = content_height.max(viewport_height);
+                        ui.set_min_height(height);
+
                         let mut terminal = TerminalView::new(ui, &mut tab.backend)
                             .set_focus(!self.show_rename_group)
                             .set_size(ui.available_size());
@@ -297,6 +300,8 @@ impl eframe::App for App {
                             ui.scroll_to_rect(target_rect, Some(egui::Align::BOTTOM));
                         } else if !is_at_bottom {
                             tab.user_scrolled_up = true;
+                        } else if total_lines < tab.last_line_count {
+                            tab.user_scrolled_up = false;
                         }
                     });
 

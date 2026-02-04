@@ -1109,6 +1109,7 @@ version = "0.1.0"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
+ "arboard",
  "egui",
  "open",
 ]
@@ -3227,22 +3228,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tabs"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "eframe",
- "egui",
- "egui_term",
- "env_logger",
- "log",
- "rfd",
- "serde",
- "serde_json",
- "wgpu",
-]
-
-[[package]]
 name = "tempfile"
 version = "3.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4567,6 +4552,22 @@ name = "xml-rs"
 version = "0.8.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
+
+[[package]]
+name = "yaaa"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "eframe",
+ "egui",
+ "egui_term",
+ "env_logger",
+ "log",
+ "rfd",
+ "serde",
+ "serde_json",
+ "wgpu",
+]
 
 [[package]]
 name = "yoke"
