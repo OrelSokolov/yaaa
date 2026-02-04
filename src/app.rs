@@ -89,8 +89,8 @@ impl eframe::App for App {
 
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button("Help", |ui| {
-                    if ui.button("About").clicked() {
+                ui.menu_button("❓ Help", |ui| {
+                    if ui.button("🛈 About").clicked() {
                         self.show_about = true;
                         ui.close();
                     }
@@ -264,7 +264,7 @@ impl eframe::App for App {
 
                     ui.horizontal(|ui| {
                         if ui
-                            .add(egui::Button::new("➕ Add").min_size(egui::vec2(0.0, 16.0)))
+                            .add(egui::Button::new("➕ New terminal").min_size(egui::vec2(0.0, 16.0)))
                             .clicked()
                         {
                             add_tab_to_group = Some(*group_id);
