@@ -7,3 +7,4 @@ Type=Application
 Categories=TerminalEmulator;System;
 Terminal=false
 StartupNotify=true
+StartupWMClass=yaaa
