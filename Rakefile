@@ -15,7 +15,7 @@ namespace :build do
   FileUtils.rm_rf(deb_dir)
   FileUtils.mkdir_p(dest_dir)
 
-  sh "cp target/release/tabs #{dest_dir}/yaaa"
+  sh "cp target/release/yaaa #{dest_dir}/yaaa"
 
   control_dir = "#{deb_dir}/DEBIAN"
   FileUtils.mkdir_p(control_dir)
