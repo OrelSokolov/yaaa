@@ -1,8 +1,12 @@
 use egui_term::{PtyEvent, TerminalBackend, TerminalView};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
+    path::PathBuf,
     sync::mpsc::{self, Receiver, Sender},
 };
+
+const GROUPS_FILE: &str = "groups.json";
 
 pub struct App {
     command_sender: Sender<(u64, egui_term::PtyEvent)>,
@@ -15,13 +19,15 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(_: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let (command_sender, command_receiver) = mpsc::channel();
         let command_sender_clone = command_sender.clone();
+        let tab_manager = TabManager::new(command_sender_clone, cc);
+
         Self {
             command_sender,
             command_receiver,
-            tab_manager: TabManager::new(command_sender_clone),
+            tab_manager,
             show_about: false,
             show_rename_group: false,
             rename_group_id: None,
@@ -67,8 +73,7 @@ impl eframe::App for App {
                     should_close = true;
                 }
                 ui.horizontal(|ui| {
-                    if ui.button("Save").clicked()
-                        || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                    if ui.button("Save").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter))
                     {
                         should_save = true;
                     }
@@ -82,6 +87,7 @@ impl eframe::App for App {
             if let Some(group_id) = self.rename_group_id {
                 self.tab_manager
                     .rename_group(group_id, self.rename_group_name.clone());
+                self.tab_manager.save_groups();
             }
             self.show_rename_group = false;
             self.rename_group_id = None;
@@ -95,11 +101,11 @@ impl eframe::App for App {
             match event {
                 egui_term::PtyEvent::Exit => {
                     self.tab_manager.remove(tab_id);
-                },
+                }
                 egui_term::PtyEvent::Title(title) => {
                     self.tab_manager.set_title(tab_id, title);
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
 
@@ -123,24 +129,19 @@ impl eframe::App for App {
                 self.tab_manager.switch_to_next_tab();
             }
         }
-        if input.key_pressed(egui::Key::N)
-            && input.modifiers.ctrl
-            && input.modifiers.shift
-        {
+        if input.key_pressed(egui::Key::N) && input.modifiers.ctrl && input.modifiers.shift {
             if let Some(group_id) = self.tab_manager.active_group_id {
                 add_tab_to_group = Some(group_id);
             }
         }
-        let mut group_actions: Vec<(u64, String, Vec<(u64, bool)>)> =
-            Vec::new();
+        let mut group_actions: Vec<(u64, String, Vec<(u64, bool)>)> = Vec::new();
 
         egui::SidePanel::left("left_panel")
             .default_width(180.0)
             .show(ctx, |ui| {
-                ui.style_mut().text_styles.insert(
-                    egui::TextStyle::Body,
-                    egui::FontId::proportional(16.0),
-                );
+                ui.style_mut()
+                    .text_styles
+                    .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
                 if ui.button("+ Add group").clicked() {
                     add_group_clicked = true;
                 }
@@ -159,15 +160,12 @@ impl eframe::App for App {
                         ui.centered_and_justified(|ui| {
                             let response = ui.add(
                                 egui::Button::new(
-                                    egui::RichText::new(group_name.clone())
-                                        .strong()
-                                        .size(18.0),
+                                    egui::RichText::new(group_name.clone()).strong().size(18.0),
                                 )
                                 .frame(false),
                             );
                             if response.hovered() {
-                                ui.ctx()
-                                    .set_cursor_icon(egui::CursorIcon::Text);
+                                ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
                             }
                             if response.clicked() {
                                 self.rename_group_id = Some(*group_id);
@@ -176,8 +174,7 @@ impl eframe::App for App {
                             }
                         });
 
-                        if tab_ids.is_empty() && ui.small_button("×").clicked()
-                        {
+                        if tab_ids.is_empty() && ui.small_button("×").clicked() {
                             group_actions.push((
                                 *group_id,
                                 String::from("remove_group"),
@@ -196,10 +193,7 @@ impl eframe::App for App {
 
                         ui.horizontal(|ui| {
                             ui.add_space(10.0);
-                            if ui
-                                .selectable_label(is_active, tab_name)
-                                .clicked()
-                            {
+                            if ui.selectable_label(is_active, tab_name).clicked() {
                                 group_actions.push((
                                     *group_id,
                                     String::from("select_tab"),
@@ -231,27 +225,43 @@ impl eframe::App for App {
         for action in group_actions {
             let (group_id, action_type, data) = action;
             match action_type.as_str() {
-                "remove_group" => self.tab_manager.remove_group(group_id),
+                "remove_group" => {
+                    self.tab_manager.remove_group(group_id);
+                    self.tab_manager.save_groups();
+                }
                 "select_tab" => {
                     if let Some(tab_id) = data.first() {
                         self.tab_manager.set_active_tab(tab_id.0);
                     }
-                },
+                }
                 "remove_tab" => {
                     if let Some(tab_id) = data.first() {
                         self.tab_manager.remove(tab_id.0);
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
 
         if add_group_clicked {
-            self.tab_manager.add_group(ctx.clone());
+            if self.tab_manager.groups.is_empty() {
+                if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                    self.tab_manager
+                        .add_group_with_path(ctx.clone(), Some(path));
+                    self.tab_manager.save_groups();
+                }
+            } else {
+                if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                    self.tab_manager
+                        .add_group_with_path(ctx.clone(), Some(path));
+                    self.tab_manager.save_groups();
+                }
+            }
         }
 
         if let Some(group_id) = add_tab_to_group {
             self.tab_manager.add_tab_to_group(group_id, ctx.clone());
+            self.tab_manager.save_groups();
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -271,8 +281,9 @@ impl eframe::App for App {
 }
 
 struct TabManager {
-    command_sender: Sender<(u64, egui_term::PtyEvent)>,
+    command_sender: Sender<(u64, PtyEvent)>,
     groups: BTreeMap<u64, TabGroup>,
+    tabs: BTreeMap<u64, Tab>,
     active_group_id: Option<u64>,
     active_tab_id: Option<u64>,
     next_group_id: u64,
@@ -280,25 +291,81 @@ struct TabManager {
 }
 
 impl TabManager {
-    fn new(command_sender: Sender<(u64, PtyEvent)>) -> Self {
+    fn new(command_sender: Sender<(u64, PtyEvent)>, cc: &eframe::CreationContext<'_>) -> Self {
         let mut manager = Self {
             command_sender,
             groups: BTreeMap::new(),
+            tabs: BTreeMap::new(),
             active_group_id: None,
             active_tab_id: None,
             next_group_id: 0,
             next_tab_id: 0,
         };
 
-        manager.add_group(Default::default());
+        if let Some(groups_data) = manager.load_groups() {
+            for group in groups_data {
+                manager.next_group_id = manager.next_group_id.max(group.id + 1);
+                manager.groups.insert(group.id, group);
+            }
+        }
+
+        if manager.groups.is_empty() {
+            let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let group_id = 0;
+            let name = TabGroup::name_from_path(&current_dir);
+            let group = TabGroup::new(group_id, name, current_dir);
+            manager.groups.insert(group_id, group);
+            manager.next_group_id = 1;
+            manager.active_group_id = Some(group_id);
+
+            manager.add_tab_to_group(group_id, cc.egui_ctx.clone());
+        }
+
         manager
     }
 
-    fn add_group(&mut self, ctx: egui::Context) {
+    fn get_groups_dir() -> Option<PathBuf> {
+        dirs::config_dir().map(|mut path| {
+            path.push("yaaa");
+            let _ = std::fs::create_dir_all(&path);
+            path
+        })
+    }
+
+    fn load_groups(&mut self) -> Option<Vec<TabGroup>> {
+        if let Some(config_dir) = Self::get_groups_dir() {
+            let groups_file = config_dir.join(GROUPS_FILE);
+            if groups_file.exists() {
+                if let Ok(content) = std::fs::read_to_string(&groups_file) {
+                    if let Ok(groups) = serde_json::from_str::<Vec<TabGroup>>(&content) {
+                        return Some(groups);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn save_groups(&self) {
+        if let Some(config_dir) = Self::get_groups_dir() {
+            let groups_file = config_dir.join(GROUPS_FILE);
+            if let Ok(groups) =
+                serde_json::to_string_pretty(&self.groups.values().collect::<Vec<_>>())
+            {
+                let _ = std::fs::write(&groups_file, groups);
+            }
+        }
+    }
+
+    fn add_group_with_path(&mut self, ctx: egui::Context, path: Option<PathBuf>) {
         let group_id = self.next_group_id;
         self.next_group_id += 1;
 
-        let group = TabGroup::new(format!("Group {}", group_id + 1));
+        let path =
+            path.unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        let name = TabGroup::name_from_path(&path);
+
+        let group = TabGroup::new(group_id, name, path);
         self.groups.insert(group_id, group);
         self.active_group_id = Some(group_id);
 
@@ -315,19 +382,24 @@ impl TabManager {
         let tab_id = self.next_tab_id;
         self.next_tab_id += 1;
 
-        let tab = Tab::new(ctx, self.command_sender.clone(), tab_id);
-        self.groups
-            .get_mut(&group_id)
-            .unwrap()
-            .tabs
-            .insert(tab_id, tab);
-        self.groups.get_mut(&group_id).unwrap().tab_ids.push(tab_id);
+        let group_path = self.groups.get(&group_id).map(|g| g.path.clone());
+        let tab = Tab::new(ctx, self.command_sender.clone(), tab_id, group_path);
+        self.tabs.insert(tab_id, tab);
+
+        if let Some(group) = self.groups.get_mut(&group_id) {
+            group.tab_ids.push(tab_id);
+        }
 
         self.active_group_id = Some(group_id);
         self.active_tab_id = Some(tab_id);
     }
 
     fn remove_group(&mut self, group_id: u64) {
+        if let Some(group) = self.groups.get(&group_id) {
+            for tab_id in &group.tab_ids {
+                self.tabs.remove(tab_id);
+            }
+        }
         self.groups.remove(&group_id);
 
         if self.active_group_id == Some(group_id) {
@@ -343,11 +415,13 @@ impl TabManager {
 
     fn remove(&mut self, id: u64) {
         let mut group_id_to_remove = None;
+        let mut group_tab_ids = None;
 
         for (group_id, group) in &mut self.groups {
             if group.tab_ids.contains(&id) {
                 group.tab_ids.retain(|t| t != &id);
-                group.tabs.remove(&id);
+                self.tabs.remove(&id);
+                group_tab_ids = Some(group.tab_ids.clone());
 
                 if group.tab_ids.is_empty() {
                     group_id_to_remove = Some(*group_id);
@@ -362,15 +436,15 @@ impl TabManager {
         }
 
         if self.active_tab_id == Some(id) {
-            self.active_tab_id = self
-                .groups
-                .get(&self.active_group_id.unwrap())
-                .and_then(|g| g.tab_ids.first().copied());
+            if let Some(tab_ids) = group_tab_ids {
+                self.active_tab_id = tab_ids.first().copied();
+            }
         }
     }
 
     fn clear(&mut self) {
         self.groups.clear();
+        self.tabs.clear();
         self.active_group_id = None;
         self.active_tab_id = None;
     }
@@ -444,35 +518,40 @@ impl TabManager {
     }
 
     fn get_tab_mut(&mut self, id: u64) -> Option<&mut Tab> {
-        for group in self.groups.values_mut() {
-            if let Some(tab) = group.tabs.get_mut(&id) {
-                return Some(tab);
-            }
-        }
-        None
+        self.tabs.get_mut(&id)
     }
 
     fn get_active(&mut self) -> Option<&mut Tab> {
         let group_id = self.active_group_id?;
         let tab_id = self.active_tab_id?;
 
-        self.groups.get_mut(&group_id)?.tabs.get_mut(&tab_id)
+        self.tabs.get_mut(&tab_id)
     }
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 struct TabGroup {
+    id: u64,
     name: String,
+    path: PathBuf,
     tab_ids: Vec<u64>,
-    tabs: BTreeMap<u64, Tab>,
 }
 
 impl TabGroup {
-    fn new(name: String) -> Self {
+    fn new(id: u64, name: String, path: PathBuf) -> Self {
         Self {
+            id,
             name,
+            path,
             tab_ids: Vec::new(),
-            tabs: BTreeMap::new(),
         }
+    }
+
+    fn name_from_path(path: &PathBuf) -> String {
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| path.to_string_lossy().to_string())
     }
 }
 
@@ -486,10 +565,10 @@ impl Tab {
         ctx: egui::Context,
         command_sender: Sender<(u64, PtyEvent)>,
         id: u64,
+        working_dir: Option<PathBuf>,
     ) -> Self {
         #[cfg(unix)]
-        let system_shell =
-            std::env::var("SHELL").expect("SHELL variable is not defined");
+        let system_shell = std::env::var("SHELL").expect("SHELL variable is not defined");
         #[cfg(windows)]
         let system_shell = "cmd.exe".to_string();
 
@@ -499,6 +578,7 @@ impl Tab {
             command_sender,
             egui_term::BackendSettings {
                 shell: system_shell,
+                working_directory: working_dir,
                 ..Default::default()
             },
         )
