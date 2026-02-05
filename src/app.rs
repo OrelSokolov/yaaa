@@ -234,7 +234,7 @@ impl eframe::App for App {
                     }
 
                     for tab_id in tab_ids {
-                        let tab_name = self.tab_manager.get_tab_name(*tab_id);
+                        let tab_name = self.tab_manager.get_tab_name(*group_id, *tab_id);
                         let is_active = active_tab_id == Some(*tab_id);
 
                         ui.horizontal(|ui| {
@@ -651,63 +651,14 @@ impl TabManager {
         }
     }
 
-    fn get_tab_name(&self, id: u64) -> String {
-        let all_ids: Vec<u64> = self
-            .groups
-            .values()
-            .flat_map(|g| g.tab_ids.iter())
-            .copied()
-            .collect();
-
-        for (i, tab_id) in all_ids.iter().enumerate() {
-            if *tab_id == id {
-                let base_name = format!("Tab{}", i + 1);
-                return self.get_unique_name(&base_name, id);
+    fn get_tab_name(&self, group_id: u64, id: u64) -> String {
+        if let Some(group) = self.groups.get(&group_id) {
+            for (i, tab_id) in group.tab_ids.iter().enumerate() {
+                if *tab_id == id {
+                    return format!("Tab{}", i + 1);
+                }
             }
         }
-
-        format!("Tab{}", id + 1)
-    }
-
-    fn get_unique_name(&self, base_name: &str, current_tab_id: u64) -> String {
-        let mut name = base_name.to_string();
-        let mut counter = 1;
-
-        let all_tabs: Vec<(u64, String)> = self
-            .groups
-            .values()
-            .flat_map(|g| {
-                g.tab_ids
-                    .iter()
-                    .map(move |&tab_id| (tab_id, self.get_tab_name_by_id(tab_id)))
-            })
-            .collect();
-
-        while all_tabs
-            .iter()
-            .any(|(tab_id, n)| *tab_id != current_tab_id && *n == name)
-        {
-            name = format!("{}{}", base_name, counter);
-            counter += 1;
-        }
-
-        name
-    }
-
-    fn get_tab_name_by_id(&self, id: u64) -> String {
-        let all_ids: Vec<u64> = self
-            .groups
-            .values()
-            .flat_map(|g| g.tab_ids.iter())
-            .copied()
-            .collect();
-
-        for (i, tab_id) in all_ids.iter().enumerate() {
-            if *tab_id == id {
-                return format!("Tab{}", i + 1);
-            }
-        }
-
         format!("Tab{}", id + 1)
     }
 
