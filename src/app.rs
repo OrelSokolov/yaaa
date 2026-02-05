@@ -121,8 +121,13 @@ impl eframe::App for App {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_about)
             .show(ctx, |ui| {
-                ui.heading("Multi-Agent Terminal");
-                ui.label("A terminal application for managing multiple agent sessions.");
+                ui.heading("Yet Another AI Agent");
+                ui.label(format!("Version: {}", env!("CARGO_PKG_VERSION")));
+                ui.add_space(10.0);
+                ui.label("Multi-agent terminal with tabs and project management");
+                ui.label("Manage multiple agent sessions across different projects");
+                ui.add_space(10.0);
+                ui.label("Author: Oleg Orlov (orelcokolov@gmail.com)");
             });
 
         let mut should_save = false;

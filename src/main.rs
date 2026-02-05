@@ -16,13 +16,13 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([400.0, 300.0])
             .with_min_inner_size([300.0, 220.0])
-            .with_title("Multi Agent Terminal")
+            .with_title("Yet Another AI Agent")
             .with_icon(icon),
         ..Default::default()
     };
 
     eframe::run_native(
-        "Multi Agent Terminal",
+        "Yet Another AI Agent",
         native_options,
         Box::new(|cc| Ok(Box::new(app::App::new(cc)))),
     )
