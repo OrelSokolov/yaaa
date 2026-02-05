@@ -98,6 +98,8 @@ impl eframe::App for App {
                 });
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let fps = ctx.input(|i| 1.0 / i.stable_dt);
+
                     if let Some(tab) = self.tab_manager.get_active() {
                         let content = tab.backend.last_content();
                         let total_lines = tab.backend.total_lines();
@@ -109,9 +111,11 @@ impl eframe::App for App {
                             .saturating_sub(view_size);
 
                         ui.label(format!(
-                            "📊 Lines: {} | Top: {} | Bottom: {} | View: {}",
-                            total_lines, from_top, from_bottom, view_size
+                            "📊 Lines: {} | Top: {} | Bottom: {} | View: {} | FPS: {:.1}",
+                            total_lines, from_top, from_bottom, view_size, fps
                         ));
+                    } else {
+                        ui.label(format!("FPS: {:.1}", fps));
                     }
                 });
             });
