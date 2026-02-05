@@ -188,7 +188,7 @@ impl eframe::App for App {
                 ui.style_mut()
                     .text_styles
                     .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
-                if ui.button("➕ Add group").clicked() {
+                if ui.button("➕ Add project").clicked() {
                     add_group_clicked = true;
                 }
 
@@ -421,6 +421,8 @@ impl TabManager {
             next_tab_id: 0,
         };
 
+        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
         if let Some(groups_data) = manager.load_groups() {
             for group in groups_data {
                 manager.next_group_id = manager.next_group_id.max(group.id + 1);
@@ -442,13 +444,14 @@ impl TabManager {
             }
         }
 
-        if manager.groups.is_empty() {
-            let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let group_id = 0;
+        let current_dir_exists_in_groups = manager.groups.values().any(|g| g.path == current_dir);
+
+        if !current_dir_exists_in_groups {
+            let group_id = manager.next_group_id;
+            manager.next_group_id += 1;
             let name = TabGroup::name_from_path(&current_dir);
             let group = TabGroup::new(group_id, name, current_dir);
             manager.groups.insert(group_id, group);
-            manager.next_group_id = 1;
             manager.active_group_id = Some(group_id);
 
             manager.add_tab_to_group(group_id, cc.egui_ctx.clone());
