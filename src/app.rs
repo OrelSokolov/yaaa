@@ -337,6 +337,10 @@ impl eframe::App for App {
                     let state = tab.scroll_state.current(is_alternate);
                     state.last_line_count = total_lines;
                     state.user_scrolled_up = false;
+
+                    if terminal_cleared {
+                        tab.backend.scroll_to_bottom();
+                    }
                 }
 
                 let scroll_state = tab.scroll_state.current(is_alternate);
