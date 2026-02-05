@@ -264,7 +264,10 @@ impl eframe::App for App {
 
                     ui.horizontal(|ui| {
                         if ui
-                            .add(egui::Button::new("➕ New terminal").min_size(egui::vec2(0.0, 16.0)))
+                            .add(
+                                egui::Button::new("➕ New terminal")
+                                    .min_size(egui::vec2(0.0, 16.0)),
+                            )
                             .clicked()
                         {
                             add_tab_to_group = Some(*group_id);
@@ -342,7 +345,11 @@ impl eframe::App for App {
                     .id_salt(("terminal", tab.backend.id()))
                     .max_height(f32::INFINITY)
                     .show(ui, |ui| {
-                        let height = content_height.max(viewport_height);
+                        let height = if is_alternate {
+                            viewport_height
+                        } else {
+                            content_height.max(viewport_height)
+                        };
                         ui.set_min_height(height);
 
                         let should_block_input = tab.just_created;
@@ -361,17 +368,19 @@ impl eframe::App for App {
                         let content_bottom = inner_rect.bottom();
                         let is_at_bottom = content_bottom - viewport_bottom < 10.0;
 
-                        if total_lines > scroll_state.last_line_count
-                            && !scroll_state.user_scrolled_up
-                        {
-                            ui.scroll_to_rect(
-                                Rect::from_min_max(inner_rect.min, inner_rect.max),
-                                Some(egui::Align::BOTTOM),
-                            );
-                        } else if !is_at_bottom {
-                            scroll_state.user_scrolled_up = true;
-                        } else if total_lines < scroll_state.last_line_count {
-                            scroll_state.user_scrolled_up = false;
+                        if !is_alternate {
+                            if total_lines > scroll_state.last_line_count
+                                && !scroll_state.user_scrolled_up
+                            {
+                                ui.scroll_to_rect(
+                                    Rect::from_min_max(inner_rect.min, inner_rect.max),
+                                    Some(egui::Align::BOTTOM),
+                                );
+                            } else if !is_at_bottom {
+                                scroll_state.user_scrolled_up = true;
+                            } else if total_lines < scroll_state.last_line_count {
+                                scroll_state.user_scrolled_up = false;
+                            }
                         }
                     });
 
