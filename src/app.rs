@@ -340,6 +340,7 @@ impl eframe::App for App {
 
                     if terminal_cleared {
                         tab.backend.scroll_to_bottom();
+                        tab.backend.clear_history();
                     }
                 }
 
