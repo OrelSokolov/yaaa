@@ -57,6 +57,7 @@ pub struct App {
     command_receiver: Receiver<(u64, egui_term::PtyEvent)>,
     tab_manager: TabManager,
     show_about: bool,
+    show_hotkeys: bool,
     show_rename_group: bool,
     rename_group_id: Option<u64>,
     rename_group_name: String,
@@ -73,6 +74,7 @@ impl App {
             command_receiver,
             tab_manager,
             show_about: false,
+            show_hotkeys: false,
             show_rename_group: false,
             rename_group_id: None,
             rename_group_name: String::new(),
@@ -90,6 +92,10 @@ impl eframe::App for App {
             ui.horizontal(|ui| {
                 egui::MenuBar::new().ui(ui, |ui| {
                     ui.menu_button("❓ Help", |ui| {
+                        if ui.button("⌘ Hotkeys").clicked() {
+                            self.show_hotkeys = true;
+                            ui.close();
+                        }
                         if ui.button("🛈 About").clicked() {
                             self.show_about = true;
                             ui.close();
@@ -132,6 +138,31 @@ impl eframe::App for App {
                 ui.label("Manage multiple agent sessions across different projects");
                 ui.add_space(10.0);
                 ui.label("Author: Oleg Orlov (orelcokolov@gmail.com)");
+            });
+
+        egui::Window::new("Hotkeys")
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut self.show_hotkeys)
+            .show(ctx, |ui| {
+                ui.heading("Keyboard Shortcuts");
+                ui.add_space(10.0);
+
+                egui::Grid::new("hotkeys_grid")
+                    .num_columns(2)
+                    .spacing([40.0, 8.0])
+                    .show(ui, |ui| {
+                        ui.label(egui::RichText::new("Ctrl + Tab").strong());
+                        ui.label("Switch to next tab");
+                        ui.end_row();
+
+                        ui.label(egui::RichText::new("Ctrl + Shift + Tab").strong());
+                        ui.label("Switch to previous tab");
+                        ui.end_row();
+
+                        ui.label(egui::RichText::new("Ctrl + Shift + N").strong());
+                        ui.label("Add new terminal tab");
+                        ui.end_row();
+                    });
             });
 
         let mut should_save = false;
