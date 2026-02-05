@@ -1,5 +1,4 @@
 use alacritty_terminal::grid::Dimensions;
-use egui::Rect;
 use egui_term::{PtyEvent, TerminalBackend, TerminalMode, TerminalView};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -12,11 +11,16 @@ const GROUPS_FILE: &str = "groups.json";
 
 trait TerminalBackendExt {
     fn total_lines(&self) -> usize;
+    fn screen_lines(&self) -> usize;
 }
 
 impl TerminalBackendExt for TerminalBackend {
     fn total_lines(&self) -> usize {
         self.last_content().grid.total_lines()
+    }
+
+    fn screen_lines(&self) -> usize {
+        self.last_content().terminal_size.screen_lines()
     }
 }
 
@@ -83,11 +87,31 @@ impl eframe::App for App {
         }
 
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-            egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button("❓ Help", |ui| {
-                    if ui.button("🛈 About").clicked() {
-                        self.show_about = true;
-                        ui.close();
+            ui.horizontal(|ui| {
+                egui::MenuBar::new().ui(ui, |ui| {
+                    ui.menu_button("❓ Help", |ui| {
+                        if ui.button("🛈 About").clicked() {
+                            self.show_about = true;
+                            ui.close();
+                        }
+                    });
+                });
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if let Some(tab) = self.tab_manager.get_active() {
+                        let content = tab.backend.last_content();
+                        let total_lines = tab.backend.total_lines();
+                        let display_offset = content.grid.display_offset();
+                        let view_size = tab.backend.screen_lines();
+                        let from_bottom = display_offset;
+                        let from_top = total_lines
+                            .saturating_sub(display_offset)
+                            .saturating_sub(view_size);
+
+                        ui.label(format!(
+                            "📊 Lines: {} | Top: {} | Bottom: {} | View: {}",
+                            total_lines, from_top, from_bottom, view_size
+                        ));
                     }
                 });
             });
@@ -320,8 +344,6 @@ impl eframe::App for App {
                 let content = tab.backend.last_content();
                 let is_alternate = content.terminal_mode.contains(TerminalMode::ALT_SCREEN);
                 let total_lines = tab.backend.total_lines();
-                let cell_height = content.terminal_size.cell_height as f32;
-                let content_height = (total_lines as f32) * cell_height;
                 let viewport_height = ui.available_height();
 
                 let mode_switched = tab.was_alternate_last_frame != is_alternate;
@@ -339,18 +361,18 @@ impl eframe::App for App {
                     }
                 }
 
+                tab.scroll_state.current(is_alternate).last_line_count = total_lines;
+                tab.was_alternate_last_frame = is_alternate;
+
                 let scroll_state = tab.scroll_state.current(is_alternate);
 
                 egui::ScrollArea::vertical()
                     .id_salt(("terminal", tab.backend.id()))
-                    .max_height(f32::INFINITY)
+                    .max_height(viewport_height)
+                    .auto_shrink([false, false])
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                     .show(ui, |ui| {
-                        let height = if is_alternate {
-                            viewport_height
-                        } else {
-                            content_height.max(viewport_height)
-                        };
-                        ui.set_min_height(height);
+                        ui.set_height(viewport_height);
 
                         let should_block_input = tab.just_created;
                         let terminal = TerminalView::new(ui, &mut tab.backend)
@@ -363,29 +385,14 @@ impl eframe::App for App {
                             tab.just_created = false;
                         }
 
-                        let inner_rect = ui.min_rect();
-                        let viewport_bottom = ui.max_rect().bottom();
-                        let content_bottom = inner_rect.bottom();
-                        let is_at_bottom = content_bottom - viewport_bottom < 10.0;
-
                         if !is_alternate {
-                            if total_lines > scroll_state.last_line_count
-                                && !scroll_state.user_scrolled_up
-                            {
-                                ui.scroll_to_rect(
-                                    Rect::from_min_max(inner_rect.min, inner_rect.max),
-                                    Some(egui::Align::BOTTOM),
-                                );
-                            } else if !is_at_bottom {
-                                scroll_state.user_scrolled_up = true;
-                            } else if total_lines < scroll_state.last_line_count {
-                                scroll_state.user_scrolled_up = false;
-                            }
+                            let inner_rect = ui.min_rect();
+                            let viewport_bottom = ui.max_rect().bottom();
+                            let content_bottom = inner_rect.bottom();
+                            let is_at_bottom = content_bottom - viewport_bottom < 10.0;
+                            scroll_state.user_scrolled_up = !is_at_bottom;
                         }
                     });
-
-                tab.was_alternate_last_frame = is_alternate;
-                scroll_state.last_line_count = total_lines;
             } else {
                 ui.centered_and_justified(|ui| {
                     ui.label("No active tab. Select a group and add a tab.");
