@@ -11,15 +11,10 @@ use std::{
 const GROUPS_FILE: &str = "groups.json";
 
 trait TerminalBackendExt {
-    fn display_offset(&self) -> usize;
     fn total_lines(&self) -> usize;
 }
 
 impl TerminalBackendExt for TerminalBackend {
-    fn display_offset(&self) -> usize {
-        self.last_content().grid.display_offset()
-    }
-
     fn total_lines(&self) -> usize {
         self.last_content().grid.total_lines()
     }
@@ -54,7 +49,7 @@ impl TabScrollState {
 }
 
 pub struct App {
-    command_sender: Sender<(u64, egui_term::PtyEvent)>,
+    _command_sender: Sender<(u64, egui_term::PtyEvent)>,
     command_receiver: Receiver<(u64, egui_term::PtyEvent)>,
     tab_manager: TabManager,
     show_about: bool,
@@ -70,7 +65,7 @@ impl App {
         let tab_manager = TabManager::new(command_sender_clone, cc);
 
         Self {
-            command_sender,
+            _command_sender: command_sender,
             command_receiver,
             tab_manager,
             show_about: false,
@@ -156,7 +151,7 @@ impl eframe::App for App {
 
         let active_group_id = self.tab_manager.active_group_id;
         let active_tab_id = self.tab_manager.active_tab_id;
-        let mut groups_to_render: Vec<(u64, String, Vec<u64>)> = self
+        let groups_to_render: Vec<(u64, String, Vec<u64>)> = self
             .tab_manager
             .groups
             .iter()
