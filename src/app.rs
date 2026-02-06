@@ -8,6 +8,7 @@ use std::{
 };
 
 const GROUPS_FILE: &str = "groups.json";
+const SETTINGS_FILE: &str = "settings.json";
 
 trait TerminalBackendExt {
     fn total_lines(&self) -> usize;
@@ -61,6 +62,7 @@ pub struct App {
     show_rename_group: bool,
     rename_group_id: Option<u64>,
     rename_group_name: String,
+    show_debug: bool,
 }
 
 impl App {
@@ -68,6 +70,8 @@ impl App {
         let (command_sender, command_receiver) = mpsc::channel();
         let command_sender_clone = command_sender.clone();
         let tab_manager = TabManager::new(command_sender_clone, cc);
+
+        let settings = Self::load_settings();
 
         Self {
             _command_sender: command_sender,
@@ -78,6 +82,41 @@ impl App {
             show_rename_group: false,
             rename_group_id: None,
             rename_group_name: String::new(),
+            show_debug: settings.show_debug,
+        }
+    }
+
+    fn get_config_dir() -> Option<PathBuf> {
+        dirs::config_dir().map(|mut path| {
+            path.push("yaaa");
+            let _ = std::fs::create_dir_all(&path);
+            path
+        })
+    }
+
+    fn load_settings() -> Settings {
+        if let Some(config_dir) = Self::get_config_dir() {
+            let settings_file = config_dir.join(SETTINGS_FILE);
+            if settings_file.exists() {
+                if let Ok(content) = std::fs::read_to_string(&settings_file) {
+                    if let Ok(settings) = serde_json::from_str::<Settings>(&content) {
+                        return settings;
+                    }
+                }
+            }
+        }
+        Settings::default()
+    }
+
+    fn save_settings(&self) {
+        if let Some(config_dir) = Self::get_config_dir() {
+            let settings_file = config_dir.join(SETTINGS_FILE);
+            let settings = Settings {
+                show_debug: self.show_debug,
+            };
+            if let Ok(settings_json) = serde_json::to_string_pretty(&settings) {
+                let _ = std::fs::write(&settings_file, settings_json);
+            }
         }
     }
 }
@@ -91,6 +130,20 @@ impl eframe::App for App {
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 egui::MenuBar::new().ui(ui, |ui| {
+                    ui.menu_button("⚙ Settings", |ui| {
+                        if ui
+                            .button(if self.show_debug {
+                                "🚫 Hide debug"
+                            } else {
+                                "🐞 Show debug"
+                            })
+                            .clicked()
+                        {
+                            self.show_debug = !self.show_debug;
+                            self.save_settings();
+                            ui.close();
+                        }
+                    });
                     ui.menu_button("❓ Help", |ui| {
                         if ui.button("⌘ Hotkeys").clicked() {
                             self.show_hotkeys = true;
@@ -104,24 +157,26 @@ impl eframe::App for App {
                 });
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let fps = ctx.input(|i| 1.0 / i.stable_dt);
+                    if self.show_debug {
+                        let fps = ctx.input(|i| 1.0 / i.stable_dt);
 
-                    if let Some(tab) = self.tab_manager.get_active() {
-                        let content = tab.backend.last_content();
-                        let total_lines = tab.backend.total_lines();
-                        let display_offset = content.grid.display_offset();
-                        let view_size = tab.backend.screen_lines();
-                        let from_bottom = display_offset;
-                        let from_top = total_lines
-                            .saturating_sub(display_offset)
-                            .saturating_sub(view_size);
+                        if let Some(tab) = self.tab_manager.get_active() {
+                            let content = tab.backend.last_content();
+                            let total_lines = tab.backend.total_lines();
+                            let display_offset = content.grid.display_offset();
+                            let view_size = tab.backend.screen_lines();
+                            let from_bottom = display_offset;
+                            let from_top = total_lines
+                                .saturating_sub(display_offset)
+                                .saturating_sub(view_size);
 
-                        ui.label(format!(
-                            "📊 Lines: {} | Top: {} | Bottom: {} | View: {} | FPS: {:.1}",
-                            total_lines, from_top, from_bottom, view_size, fps
-                        ));
-                    } else {
-                        ui.label(format!("FPS: {:.1}", fps));
+                            ui.label(format!(
+                                "📊 Lines: {} | Top: {} | Bottom: {} | View: {} | FPS: {:.1}",
+                                total_lines, from_top, from_bottom, view_size, fps
+                            ));
+                        } else {
+                            ui.label(format!("FPS: {:.1}", fps));
+                        }
                     }
                 });
             });
@@ -715,6 +770,16 @@ impl TabManager {
 
         self.tabs.get_mut(&tab_id)
     }
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct Settings {
+    #[serde(default = "default_show_debug")]
+    show_debug: bool,
+}
+
+fn default_show_debug() -> bool {
+    true
 }
 
 #[derive(Serialize, Deserialize, Clone)]
