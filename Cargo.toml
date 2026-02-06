@@ -1,6 +1,6 @@
 [package]
 name = "yaaa"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
  description = "Yet Another AI Agent"
 
@@ -36,6 +36,7 @@ wayland = ["eframe/wayland"]
 [package.metadata.deb]
 name = "yaaa"
 maintainer = "Oleg Orlov <orelcokolov@gmail.com>"
+revision = ""
 copyright = "Copyright (C) 2025 Oleg Orlov."
 extended-description = """\
 Multi-Agent Terminal - Yet Another AI Agent - \
