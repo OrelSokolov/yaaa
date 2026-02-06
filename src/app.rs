@@ -11,6 +11,15 @@ use std::{
 const GROUPS_FILE: &str = "groups.json";
 const SETTINGS_FILE: &str = "settings.json";
 
+fn get_hotkeys() -> std::collections::BTreeMap<&'static str, &'static str> {
+    let mut hotkeys = std::collections::BTreeMap::new();
+    hotkeys.insert("Ctrl + Tab", "Switch to next tab");
+    hotkeys.insert("Ctrl + Shift + Tab", "Switch to previous tab");
+    hotkeys.insert("Ctrl + Shift + N", "Add new terminal tab");
+    hotkeys.insert("Ctrl + Shift + Q", "Close current tab");
+    hotkeys
+}
+
 trait TerminalBackendExt {
     fn total_lines(&self) -> usize;
     fn screen_lines(&self) -> usize;
@@ -258,17 +267,12 @@ impl eframe::App for App {
                     .num_columns(2)
                     .spacing([40.0, 8.0])
                     .show(ui, |ui| {
-                        ui.label(egui::RichText::new("Ctrl + Tab").strong());
-                        ui.label("Switch to next tab");
-                        ui.end_row();
-
-                        ui.label(egui::RichText::new("Ctrl + Shift + Tab").strong());
-                        ui.label("Switch to previous tab");
-                        ui.end_row();
-
-                        ui.label(egui::RichText::new("Ctrl + Shift + N").strong());
-                        ui.label("Add new terminal tab");
-                        ui.end_row();
+                        let hotkeys = get_hotkeys();
+                        for (key, description) in hotkeys {
+                            ui.label(egui::RichText::new(key).strong());
+                            ui.label(description);
+                            ui.end_row();
+                        }
                     });
             });
 
@@ -343,6 +347,12 @@ impl eframe::App for App {
         if input.key_pressed(egui::Key::N) && input.modifiers.ctrl && input.modifiers.shift {
             if let Some(group_id) = self.tab_manager.active_group_id {
                 add_tab_to_group = Some(group_id);
+            }
+        }
+        if input.key_pressed(egui::Key::Q) && input.modifiers.ctrl && input.modifiers.shift {
+            if let Some(tab_id) = self.tab_manager.active_tab_id {
+                self.tab_manager.remove(tab_id);
+                self.tab_manager.save_groups();
             }
         }
         let mut group_actions: Vec<(u64, String, Vec<(u64, bool)>)> = Vec::new();
