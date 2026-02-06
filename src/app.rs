@@ -188,7 +188,14 @@ impl eframe::App for App {
                                 .text_styles
                                 .insert(egui::TextStyle::Button, egui::FontId::proportional(14.0));
 
-                            ui.menu_button("YAAA", |_ui| {});
+                            ui.menu_button("Yet Another AI Agent", |ui| {
+                                apply_menu_style(ui);
+
+                                if ui.button("ℹ About").clicked() {
+                                    self.show_about = true;
+                                    ui.close();
+                                }
+                            });
                             ui.menu_button("Settings", |ui| {
                                 apply_menu_style(ui);
 
@@ -233,10 +240,6 @@ impl eframe::App for App {
                                 apply_menu_style(ui);
                                 if ui.button("⌘ Hotkeys").clicked() {
                                     self.show_hotkeys = true;
-                                    ui.close();
-                                }
-                                if ui.button("ℹ About").clicked() {
-                                    self.show_about = true;
                                     ui.close();
                                 }
                             });
