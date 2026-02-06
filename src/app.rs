@@ -194,7 +194,7 @@ impl eframe::App for App {
 
                                 ui.menu_button("General", |ui| {
                                     apply_menu_style(ui);
-                                    if ui.button("⚙️ Settings...").clicked() {
+                                    if ui.button("🔧 Settings...").clicked() {
                                         self.show_settings = true;
                                         ui.close();
                                     }
@@ -231,7 +231,7 @@ impl eframe::App for App {
                                     self.show_hotkeys = true;
                                     ui.close();
                                 }
-                                if ui.button("❓ About").clicked() {
+                                if ui.button("ℹ About").clicked() {
                                     self.show_about = true;
                                     ui.close();
                                 }
@@ -966,7 +966,7 @@ impl TabManager {
             for (i, tab_info) in group.tabs.iter().enumerate() {
                 if tab_info.id == id {
                     return if is_agent {
-                        format!("{}. Agent", i + 1)
+                        format!("{}. Agent 💬", i + 1)
                     } else {
                         format!("{}. Terminal", i + 1)
                     };
@@ -974,7 +974,7 @@ impl TabManager {
             }
         }
         if is_agent {
-            format!("{}. Agent", id + 1)
+            format!("{}. 🤖 Agent", id + 1)
         } else {
             format!("{}. Terminal", id + 1)
         }
