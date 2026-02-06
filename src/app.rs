@@ -1,85 +1,19 @@
+use crate::config::Settings;
+use crate::hotkeys::handle_keyboard_events;
 use crate::menu::apply_menu_style;
-use alacritty_terminal::grid::Dimensions;
-use egui_term::{PtyEvent, TerminalBackend, TerminalMode, TerminalView};
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeMap,
-    path::PathBuf,
-    sync::mpsc::{self, Receiver, Sender},
+use crate::terminal::TabManager;
+use crate::ui::{
+    show_central_panel, show_debug_panel, show_left_panel, WindowActions, WindowManager,
 };
-
-const GROUPS_FILE: &str = "groups.json";
-const SETTINGS_FILE: &str = "settings.json";
-
-fn get_hotkeys() -> std::collections::BTreeMap<&'static str, &'static str> {
-    let mut hotkeys = std::collections::BTreeMap::new();
-    hotkeys.insert("Ctrl + Tab", "Switch to next tab");
-    hotkeys.insert("Ctrl + Shift + Tab", "Switch to previous tab");
-    hotkeys.insert("Ctrl + Shift + N", "Add new terminal tab");
-    hotkeys.insert("Ctrl + Shift + A", "Add new agent tab");
-    hotkeys.insert("Ctrl + Shift + Q", "Close current tab");
-    hotkeys
-}
-
-trait TerminalBackendExt {
-    fn total_lines(&self) -> usize;
-    fn screen_lines(&self) -> usize;
-}
-
-impl TerminalBackendExt for TerminalBackend {
-    fn total_lines(&self) -> usize {
-        self.last_content().grid.total_lines()
-    }
-
-    fn screen_lines(&self) -> usize {
-        self.last_content().terminal_size.screen_lines()
-    }
-}
-
-#[derive(Default)]
-struct ScrollState {
-    last_line_count: usize,
-    user_scrolled_up: bool,
-}
-
-impl ScrollState {
-    fn detect_clear(&self, current_lines: usize) -> bool {
-        self.last_line_count > 0 && (current_lines as f64) < (self.last_line_count as f64) * 0.1
-    }
-}
-
-#[derive(Default)]
-struct TabScrollState {
-    normal: ScrollState,
-    alternate: ScrollState,
-}
-
-impl TabScrollState {
-    fn current(&mut self, is_alternate: bool) -> &mut ScrollState {
-        if is_alternate {
-            &mut self.alternate
-        } else {
-            &mut self.normal
-        }
-    }
-}
+use std::sync::mpsc::{self, Receiver, Sender};
 
 pub struct App {
     _command_sender: Sender<(u64, egui_term::PtyEvent)>,
     command_receiver: Receiver<(u64, egui_term::PtyEvent)>,
     tab_manager: TabManager,
-    show_about: bool,
-    show_hotkeys: bool,
-    show_rename_group: bool,
-    rename_group_id: Option<u64>,
-    rename_group_name: String,
-    show_terminal_lines: bool,
-    show_fps: bool,
-    show_settings: bool,
-    editing_default_shell_cmd: String,
-    editing_default_agent_cmd: String,
-    saved_default_shell_cmd: String,
-    saved_default_agent_cmd: String,
+    window_manager: WindowManager,
+    pub show_terminal_lines: bool,
+    pub show_fps: bool,
 }
 
 impl App {
@@ -87,7 +21,7 @@ impl App {
         let (command_sender, command_receiver) = mpsc::channel();
         let command_sender_clone = command_sender.clone();
 
-        let settings = Self::load_settings();
+        let settings = Settings::load();
 
         let tab_manager = TabManager::new(
             command_sender_clone,
@@ -96,65 +30,161 @@ impl App {
             settings.default_agent_cmd.clone(),
         );
 
-        let editing_default_shell_cmd = settings.default_shell_cmd.clone();
-        let editing_default_agent_cmd = settings.default_agent_cmd.clone();
-        let saved_default_shell_cmd = editing_default_shell_cmd.clone();
-        let saved_default_agent_cmd = editing_default_agent_cmd.clone();
+        let window_manager = WindowManager::new(
+            settings.default_shell_cmd.clone(),
+            settings.default_agent_cmd.clone(),
+        );
 
         Self {
             _command_sender: command_sender,
             command_receiver,
             tab_manager,
-            show_about: false,
-            show_hotkeys: false,
-            show_rename_group: false,
-            rename_group_id: None,
-            rename_group_name: String::new(),
+            window_manager,
             show_terminal_lines: settings.show_terminal_lines,
             show_fps: settings.show_fps,
-            show_settings: false,
-            editing_default_shell_cmd,
-            editing_default_agent_cmd,
-            saved_default_shell_cmd,
-            saved_default_agent_cmd,
         }
-    }
-
-    fn get_config_dir() -> Option<PathBuf> {
-        dirs::config_dir().map(|mut path| {
-            path.push("yaaa");
-            let _ = std::fs::create_dir_all(&path);
-            path
-        })
-    }
-
-    fn load_settings() -> Settings {
-        if let Some(config_dir) = Self::get_config_dir() {
-            let settings_file = config_dir.join(SETTINGS_FILE);
-            if settings_file.exists() {
-                if let Ok(content) = std::fs::read_to_string(&settings_file) {
-                    if let Ok(settings) = serde_json::from_str::<Settings>(&content) {
-                        return settings;
-                    }
-                }
-            }
-        }
-        Settings::default()
     }
 
     fn save_settings(&self) {
-        if let Some(config_dir) = Self::get_config_dir() {
-            let settings_file = config_dir.join(SETTINGS_FILE);
-            let settings = Settings {
-                show_terminal_lines: self.show_terminal_lines,
-                show_fps: self.show_fps,
-                default_shell_cmd: self.editing_default_shell_cmd.clone(),
-                default_agent_cmd: self.editing_default_agent_cmd.clone(),
-            };
-            if let Ok(settings_json) = serde_json::to_string_pretty(&settings) {
-                let _ = std::fs::write(&settings_file, settings_json);
+        let settings = Settings {
+            show_terminal_lines: self.show_terminal_lines,
+            show_fps: self.show_fps,
+            default_shell_cmd: self.window_manager.editing_default_shell_cmd.clone(),
+            default_agent_cmd: self.window_manager.editing_default_agent_cmd.clone(),
+        };
+        settings.save();
+    }
+
+    fn handle_command_events(&mut self) {
+        if let Ok((tab_id, event)) = self.command_receiver.try_recv() {
+            match event {
+                egui_term::PtyEvent::Exit => {
+                    self.tab_manager.remove(tab_id);
+                }
+                egui_term::PtyEvent::Title(title) => {
+                    self.tab_manager.set_title(tab_id, title);
+                }
+                _ => {}
             }
         }
+    }
+
+    fn handle_keyboard(
+        &mut self,
+        ctx: &egui::Context,
+    ) -> (bool, Option<u64>, Option<u64>, Option<u64>) {
+        let events = handle_keyboard_events(ctx, self.tab_manager.active_group_id.is_some());
+
+        let mut close_tab_id = None;
+        let mut add_tab_to_group = None;
+        let mut add_agent_tab_to_group = None;
+
+        if events.switch_to_next_tab {
+            self.tab_manager.switch_to_next_tab();
+        }
+
+        if events.switch_to_prev_tab {
+            self.tab_manager.switch_to_prev_tab();
+        }
+
+        if events.add_terminal_tab {
+            if let Some(group_id) = self.tab_manager.active_group_id {
+                add_tab_to_group = Some(group_id);
+            }
+        }
+
+        if events.add_agent_tab {
+            if let Some(group_id) = self.tab_manager.active_group_id {
+                add_agent_tab_to_group = Some(group_id);
+            }
+        }
+
+        if events.close_tab {
+            if let Some(tab_id) = self.tab_manager.active_tab_id {
+                close_tab_id = Some(tab_id);
+            }
+        }
+
+        (
+            events.close_tab,
+            close_tab_id,
+            add_tab_to_group,
+            add_agent_tab_to_group,
+        )
+    }
+
+    fn handle_panel_actions(&mut self, actions: super::ui::panels::PanelActions) {
+        if actions.add_group_clicked {
+            if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                self.tab_manager.add_group_with_path(
+                    self.tab_manager
+                        .active_tab_id
+                        .map(|_| egui::Context::default())
+                        .unwrap_or_else(|| egui::Context::default()),
+                    Some(path),
+                );
+                self.tab_manager.save_groups();
+            }
+        }
+
+        if let Some(group_id) = actions.add_tab_to_group {
+            self.tab_manager
+                .add_tab_to_group(group_id, self.get_egui_ctx(), false);
+            self.tab_manager.save_groups();
+        }
+
+        if let Some(group_id) = actions.add_agent_tab_to_group {
+            self.tab_manager
+                .add_tab_to_group(group_id, self.get_egui_ctx(), true);
+            self.tab_manager.save_groups();
+        }
+
+        for (group_id, action_type, data) in actions.group_actions {
+            match action_type.as_str() {
+                "remove_group" => {
+                    self.tab_manager.remove_group(group_id);
+                    self.tab_manager.save_groups();
+                }
+                "select_tab" => {
+                    if let Some(tab_id) = data.first() {
+                        self.tab_manager.set_active_tab(tab_id.0);
+                    }
+                }
+                "remove_tab" => {
+                    if let Some(tab_id) = data.first() {
+                        self.tab_manager.remove(tab_id.0);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn handle_window_actions(&mut self, actions: WindowActions) {
+        if let Some((group_id, name)) = actions.rename_group {
+            self.tab_manager.rename_group(group_id, name);
+            self.tab_manager.save_groups();
+        }
+
+        if actions.should_save_groups {
+            self.tab_manager.save_groups();
+        }
+
+        if let Some(shell_cmd) = actions.default_shell_cmd {
+            self.tab_manager.set_default_shell_cmd(shell_cmd);
+        }
+
+        if let Some(agent_cmd) = actions.default_agent_cmd {
+            self.tab_manager.set_default_agent_cmd(agent_cmd);
+        }
+
+        if actions.should_save_settings {
+            self.save_settings();
+        }
+    }
+
+    fn get_egui_ctx(&self) -> egui::Context {
+        egui::Context::default()
     }
 }
 
@@ -174,7 +204,6 @@ impl eframe::App for App {
                 ui.vertical(|ui| {
                     ui.add_space(2.0);
                     ui.horizontal(|ui| {
-                        //ui.style_mut().spacing.button_padding = egui::vec2(20.0, 10.0);
                         ui.style_mut()
                             .text_styles
                             .insert(egui::TextStyle::Button, egui::FontId::proportional(16.0));
@@ -195,7 +224,7 @@ impl eframe::App for App {
                                 ui.menu_button("🔧 General", |ui| {
                                     apply_menu_style(ui);
                                     if ui.button("💻 Terminal").clicked() {
-                                        self.show_settings = true;
+                                        self.window_manager.show_settings = true;
                                         ui.close();
                                     }
                                 });
@@ -232,11 +261,11 @@ impl eframe::App for App {
                             ui.menu_button("Help", |ui| {
                                 apply_menu_style(ui);
                                 if ui.button("⌘ Hotkeys").clicked() {
-                                    self.show_hotkeys = true;
+                                    self.window_manager.show_hotkeys = true;
                                     ui.close();
                                 }
                                 if ui.button("ℹ About").clicked() {
-                                    self.show_about = true;
+                                    self.window_manager.show_about = true;
                                     ui.close();
                                 }
                             });
@@ -246,373 +275,29 @@ impl eframe::App for App {
                 });
             });
 
-        if self.show_fps || self.show_terminal_lines {
-            egui::TopBottomPanel::bottom("debug_panel").show(ctx, |ui| {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let mut debug_parts = Vec::new();
+        let window_actions = self.window_manager.show(ctx);
 
-                    if self.show_fps {
-                        let fps = ctx.input(|i| 1.0 / i.stable_dt);
-                        debug_parts.push(format!("FPS: {:.1}", fps));
-                    }
+        let panel_actions = show_left_panel(ctx, &self.tab_manager, &mut self.window_manager);
 
-                    if self.show_terminal_lines {
-                        if let Some(tab) = self.tab_manager.get_active() {
-                            let content = tab.backend.last_content();
-                            let total_lines = tab.backend.total_lines();
-                            let display_offset = content.grid.display_offset();
-                            let view_size = tab.backend.screen_lines();
-                            let from_bottom = display_offset;
-                            let from_top = total_lines
-                                .saturating_sub(display_offset)
-                                .saturating_sub(view_size);
+        show_debug_panel(
+            ctx,
+            self.show_fps,
+            self.show_terminal_lines,
+            &mut self.tab_manager,
+        );
 
-                            debug_parts.push(format!(
-                                "Lines: {} | Top: {} | Bottom: {} | View: {}",
-                                total_lines, from_top, from_bottom, view_size
-                            ));
-                        }
-                    }
+        let (_close_tab, close_tab_id, add_tab_to_group, add_agent_tab_to_group) =
+            self.handle_keyboard(ctx);
 
-                    if !debug_parts.is_empty() {
-                        ui.label(format!("📊 {}", debug_parts.join(" | ")));
-                    }
-                });
-            });
-        }
+        self.handle_command_events();
 
-        egui::Window::new("About")
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .open(&mut self.show_about)
-            .show(ctx, |ui| {
-                ui.heading("Yet Another AI Agent");
-                ui.label(format!("Version: {}", env!("CARGO_PKG_VERSION")));
-                ui.add_space(10.0);
-                ui.label("Multi-agent terminal with tabs and project management");
-                ui.label("Manage multiple agent sessions across different projects");
-                ui.add_space(10.0);
-                ui.label("Author: Oleg Orlov (orelcokolov@gmail.com)");
-            });
+        self.handle_panel_actions(panel_actions);
 
-        egui::Window::new("Hotkeys")
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .open(&mut self.show_hotkeys)
-            .show(ctx, |ui| {
-                ui.heading("Keyboard Shortcuts");
-                ui.add_space(10.0);
+        self.handle_window_actions(window_actions);
 
-                egui::Grid::new("hotkeys_grid")
-                    .num_columns(2)
-                    .spacing([40.0, 8.0])
-                    .show(ui, |ui| {
-                        let hotkeys = get_hotkeys();
-                        for (key, description) in hotkeys {
-                            ui.label(egui::RichText::new(key).strong());
-                            ui.label(description);
-                            ui.end_row();
-                        }
-                    });
-            });
-
-        let mut should_save = false;
-        let mut should_close = false;
-        egui::Window::new("Rename Group")
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .open(&mut self.show_rename_group)
-            .show(ctx, |ui| {
-                ui.heading("Rename Group");
-                ui.text_edit_singleline(&mut self.rename_group_name);
-                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                    should_close = true;
-                }
-                ui.horizontal(|ui| {
-                    if ui.button("Save").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter))
-                    {
-                        should_save = true;
-                    }
-                    if ui.button("Cancel").clicked() {
-                        should_close = true;
-                    }
-                });
-            });
-
-        if should_save {
-            if let Some(group_id) = self.rename_group_id {
-                self.tab_manager
-                    .rename_group(group_id, self.rename_group_name.clone());
-                self.tab_manager.save_groups();
-            }
-            self.show_rename_group = false;
-            self.rename_group_id = None;
-        }
-        if should_close {
-            self.show_rename_group = false;
-            self.rename_group_id = None;
-        }
-
-        let mut settings_save = false;
-        let mut settings_cancel = false;
-        egui::Window::new("Settings")
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .open(&mut self.show_settings)
-            .show(ctx, |ui| {
-                ui.heading("General Settings");
-                ui.add_space(10.0);
-
-                ui.label("Default shell cmd:");
-                ui.text_edit_singleline(&mut self.editing_default_shell_cmd);
-
-                ui.add_space(5.0);
-
-                ui.label("Default agent cmd:");
-                ui.text_edit_singleline(&mut self.editing_default_agent_cmd);
-
-                ui.add_space(15.0);
-
-                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                    settings_cancel = true;
-                }
-
-                ui.horizontal(|ui| {
-                    if ui.button("Save").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter))
-                    {
-                        settings_save = true;
-                    }
-                    if ui.button("Cancel").clicked() {
-                        settings_cancel = true;
-                    }
-                });
-            });
-
-        if settings_save {
-            self.saved_default_shell_cmd = self.editing_default_shell_cmd.clone();
-            self.saved_default_agent_cmd = self.editing_default_agent_cmd.clone();
-            self.tab_manager
-                .set_default_shell_cmd(self.editing_default_shell_cmd.clone());
-            self.tab_manager
-                .set_default_agent_cmd(self.editing_default_agent_cmd.clone());
-            self.save_settings();
-            self.show_settings = false;
-        }
-        if settings_cancel {
-            self.editing_default_shell_cmd = self.saved_default_shell_cmd.clone();
-            self.editing_default_agent_cmd = self.saved_default_agent_cmd.clone();
-            self.show_settings = false;
-        }
-
-        if let Ok((tab_id, event)) = self.command_receiver.try_recv() {
-            match event {
-                egui_term::PtyEvent::Exit => {
-                    self.tab_manager.remove(tab_id);
-                }
-                egui_term::PtyEvent::Title(title) => {
-                    self.tab_manager.set_title(tab_id, title);
-                }
-                _ => {}
-            }
-        }
-
-        let active_group_id = self.tab_manager.active_group_id;
-        let active_tab_id = self.tab_manager.active_tab_id;
-        let groups_to_render: Vec<(u64, String, Vec<TabInfo>)> = self
-            .tab_manager
-            .groups
-            .iter()
-            .map(|(id, g)| (*id, g.name.clone(), g.tabs.clone()))
-            .collect();
-
-        let mut add_group_clicked = false;
-        let mut add_tab_to_group: Option<u64> = None;
-        let mut add_agent_tab_to_group: Option<u64> = None;
-
-        let input = ctx.input(|i| i.clone());
-        if input.key_pressed(egui::Key::Tab) && input.modifiers.ctrl {
-            if input.modifiers.shift {
-                self.tab_manager.switch_to_prev_tab();
-            } else {
-                self.tab_manager.switch_to_next_tab();
-            }
-        }
-        if input.key_pressed(egui::Key::N) && input.modifiers.ctrl && input.modifiers.shift {
-            if let Some(group_id) = self.tab_manager.active_group_id {
-                add_tab_to_group = Some(group_id);
-            }
-        }
-        if input.key_pressed(egui::Key::A) && input.modifiers.ctrl && input.modifiers.shift {
-            if let Some(group_id) = self.tab_manager.active_group_id {
-                add_agent_tab_to_group = Some(group_id);
-            }
-        }
-        if input.key_pressed(egui::Key::Q) && input.modifiers.ctrl && input.modifiers.shift {
-            if let Some(tab_id) = self.tab_manager.active_tab_id {
-                self.tab_manager.remove(tab_id);
-                self.tab_manager.save_groups();
-            }
-        }
-        let mut group_actions: Vec<(u64, String, Vec<(u64, bool)>)> = Vec::new();
-
-        egui::SidePanel::left("left_panel")
-            .default_width(100.0)
-            .show(ctx, |ui| {
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        ui.style_mut().spacing.interact_size = egui::vec2(120.0, 24.0);
-                        ui.style_mut()
-                            .text_styles
-                            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
-                        let add_project_btn = ui
-                            .button("➕ Add project")
-                            .on_hover_cursor(egui::CursorIcon::PointingHand);
-                        if add_project_btn.clicked() {
-                            add_group_clicked = true;
-                        }
-
-                        ui.separator();
-
-                        for (group_id, group_name, tabs) in &groups_to_render {
-                            let is_selected = active_group_id == Some(*group_id);
-
-                            ui.horizontal(|ui| {
-                                ui.centered_and_justified(|ui| {
-                                    let sense = egui::Sense::click_and_drag();
-                                    let response =
-                                        ui.allocate_rect(ui.available_rect_before_wrap(), sense);
-
-                                    let text_color = if response.hovered() {
-                                        ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
-                                        egui::Color32::LIGHT_BLUE
-                                    } else if is_selected {
-                                        ui.visuals().selection.stroke.color
-                                    } else {
-                                        ui.visuals().text_color()
-                                    };
-
-                                    ui.painter().text(
-                                        response.rect.center(),
-                                        egui::Align2::CENTER_CENTER,
-                                        group_name,
-                                        egui::FontId::proportional(18.0),
-                                        text_color,
-                                    );
-
-                                    if response.clicked() {
-                                        self.rename_group_id = Some(*group_id);
-                                        self.rename_group_name = group_name.clone();
-                                        self.show_rename_group = true;
-                                    }
-                                });
-
-                                if tabs.is_empty()
-                                    && ui
-                                        .small_button("×")
-                                        .on_hover_cursor(egui::CursorIcon::PointingHand)
-                                        .clicked()
-                                {
-                                    group_actions.push((
-                                        *group_id,
-                                        String::from("remove_group"),
-                                        Vec::new(),
-                                    ));
-                                }
-                            });
-
-                            ui.add_space(10.0);
-
-                            for tab_info in tabs {
-                                let tab_id = tab_info.id;
-                                let tab_name = self.tab_manager.get_tab_name(*group_id, tab_id);
-                                let is_active = active_tab_id == Some(tab_id);
-
-                                ui.horizontal(|ui| {
-                                    let width = ui.available_width() * 0.9;
-                                    let label = egui::Button::selectable(is_active, tab_name)
-                                        .min_size(egui::vec2(width, 0.0));
-                                    let response = ui
-                                        .add(label)
-                                        .on_hover_cursor(egui::CursorIcon::PointingHand);
-                                    if response.clicked() {
-                                        group_actions.push((
-                                            *group_id,
-                                            String::from("select_tab"),
-                                            vec![(tab_id, false)],
-                                        ));
-                                    }
-
-                                    let close_btn = ui
-                                        .add(egui::Button::new("✖").min_size(egui::vec2(30.0, 0.0)))
-                                        .on_hover_cursor(egui::CursorIcon::PointingHand);
-                                    if close_btn.clicked() {
-                                        group_actions.push((
-                                            *group_id,
-                                            String::from("remove_tab"),
-                                            vec![(tab_id, false)],
-                                        ));
-                                    }
-                                });
-                            }
-
-                            ui.horizontal(|ui| {
-                                let terminal_btn = ui
-                                    .add(
-                                        egui::Button::new("➕ Terminal")
-                                            .min_size(egui::vec2(0.0, 16.0)),
-                                    )
-                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-                                if terminal_btn.clicked() {
-                                    add_tab_to_group = Some(*group_id);
-                                }
-                                let agent_btn = ui
-                                    .add(
-                                        egui::Button::new("➕ Agent")
-                                            .min_size(egui::vec2(0.0, 16.0)),
-                                    )
-                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-                                if agent_btn.clicked() {
-                                    add_agent_tab_to_group = Some(*group_id);
-                                }
-                            });
-
-                            ui.separator();
-                        }
-                    });
-            });
-
-        for action in group_actions {
-            let (group_id, action_type, data) = action;
-            match action_type.as_str() {
-                "remove_group" => {
-                    self.tab_manager.remove_group(group_id);
-                    self.tab_manager.save_groups();
-                }
-                "select_tab" => {
-                    if let Some(tab_id) = data.first() {
-                        self.tab_manager.set_active_tab(tab_id.0);
-                    }
-                }
-                "remove_tab" => {
-                    if let Some(tab_id) = data.first() {
-                        self.tab_manager.remove(tab_id.0);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        if add_group_clicked {
-            if self.tab_manager.groups.is_empty() {
-                if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                    self.tab_manager
-                        .add_group_with_path(ctx.clone(), Some(path));
-                    self.tab_manager.save_groups();
-                }
-            } else {
-                if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                    self.tab_manager
-                        .add_group_with_path(ctx.clone(), Some(path));
-                    self.tab_manager.save_groups();
-                }
-            }
+        if let Some(tab_id) = close_tab_id {
+            self.tab_manager.remove(tab_id);
+            self.tab_manager.save_groups();
         }
 
         if let Some(group_id) = add_tab_to_group {
@@ -627,565 +312,6 @@ impl eframe::App for App {
             self.tab_manager.save_groups();
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            if let Some(tab) = self.tab_manager.get_active() {
-                let content = tab.backend.last_content();
-                let is_alternate = content.terminal_mode.contains(TerminalMode::ALT_SCREEN);
-                let total_lines = tab.backend.total_lines();
-                let viewport_height = ui.available_height();
-
-                let mode_switched = tab.was_alternate_last_frame != is_alternate;
-                let terminal_cleared =
-                    !is_alternate && tab.scroll_state.normal.detect_clear(total_lines);
-
-                if terminal_cleared || mode_switched {
-                    let state = tab.scroll_state.current(is_alternate);
-                    state.last_line_count = total_lines;
-                    state.user_scrolled_up = false;
-
-                    if terminal_cleared {
-                        tab.backend.scroll_to_bottom();
-                        tab.backend.clear_history();
-                    }
-                }
-
-                tab.scroll_state.current(is_alternate).last_line_count = total_lines;
-                tab.was_alternate_last_frame = is_alternate;
-
-                let scroll_state = tab.scroll_state.current(is_alternate);
-
-                egui::ScrollArea::vertical()
-                    .id_salt(("terminal", tab.backend.id()))
-                    .max_height(viewport_height)
-                    .auto_shrink([false, false])
-                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                    .show(ui, |ui| {
-                        ui.set_height(viewport_height);
-
-                        let should_block_input = tab.just_created;
-                        let terminal = TerminalView::new(ui, &mut tab.backend)
-                            .set_focus(
-                                !self.show_rename_group
-                                    && !self.show_settings
-                                    && !should_block_input,
-                            )
-                            .set_size(ui.available_size());
-
-                        ui.add(terminal);
-
-                        if tab.just_created {
-                            tab.just_created = false;
-                        }
-
-                        if !is_alternate {
-                            let inner_rect = ui.min_rect();
-                            let viewport_bottom = ui.max_rect().bottom();
-                            let content_bottom = inner_rect.bottom();
-                            let is_at_bottom = content_bottom - viewport_bottom < 10.0;
-                            scroll_state.user_scrolled_up = !is_at_bottom;
-                        }
-                    });
-            } else {
-                ui.centered_and_justified(|ui| {
-                    ui.label("No active tab. Select a group and add a tab.");
-                });
-            }
-        });
-    }
-}
-
-struct TabManager {
-    command_sender: Sender<(u64, PtyEvent)>,
-    groups: BTreeMap<u64, TabGroup>,
-    tabs: BTreeMap<u64, Tab>,
-    active_group_id: Option<u64>,
-    active_tab_id: Option<u64>,
-    next_group_id: u64,
-    next_tab_id: u64,
-    default_shell_cmd: String,
-    default_agent_cmd: String,
-}
-
-impl TabManager {
-    fn new(
-        command_sender: Sender<(u64, PtyEvent)>,
-        cc: &eframe::CreationContext<'_>,
-        default_shell_cmd: String,
-        default_agent_cmd: String,
-    ) -> Self {
-        let mut manager = Self {
-            command_sender,
-            groups: BTreeMap::new(),
-            tabs: BTreeMap::new(),
-            active_group_id: None,
-            active_tab_id: None,
-            next_group_id: 0,
-            next_tab_id: 0,
-            default_shell_cmd,
-            default_agent_cmd,
-        };
-
-        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-
-        if let Some(groups_data) = manager.load_groups() {
-            for mut group in groups_data {
-                manager.next_group_id = manager.next_group_id.max(group.id + 1);
-                for tab_info in &mut group.tabs {
-                    manager.next_tab_id = manager.next_tab_id.max(tab_info.id + 1);
-                    let use_agent =
-                        tab_info.is_agent && Tab::command_exists(&manager.default_agent_cmd);
-                    tab_info.is_agent = use_agent;
-                    let shell_cmd = if use_agent {
-                        &manager.default_agent_cmd
-                    } else {
-                        &manager.default_shell_cmd
-                    };
-                    let tab = Tab::new(
-                        cc.egui_ctx.clone(),
-                        manager.command_sender.clone(),
-                        tab_info.id,
-                        Some(group.path.clone()),
-                        shell_cmd,
-                        use_agent,
-                    );
-                    manager.tabs.insert(tab_info.id, tab);
-                }
-                manager.groups.insert(group.id, group);
-            }
-            if let Some(first_group) = manager.groups.first_key_value() {
-                manager.active_group_id = Some(*first_group.0);
-                manager.active_tab_id = first_group.1.tabs.first().map(|t| t.id);
-            }
-        }
-
-        let current_dir_exists_in_groups = manager.groups.values().any(|g| g.path == current_dir);
-
-        if !current_dir_exists_in_groups {
-            let group_id = manager.next_group_id;
-            manager.next_group_id += 1;
-            let name = TabGroup::name_from_path(&current_dir);
-            let group = TabGroup::new(group_id, name, current_dir);
-            manager.groups.insert(group_id, group);
-            manager.active_group_id = Some(group_id);
-
-            manager.add_tab_to_group(group_id, cc.egui_ctx.clone(), false);
-        }
-
-        manager
-    }
-
-    fn get_groups_dir() -> Option<PathBuf> {
-        dirs::config_dir().map(|mut path| {
-            path.push("yaaa");
-            let _ = std::fs::create_dir_all(&path);
-            path
-        })
-    }
-
-    fn load_groups(&mut self) -> Option<Vec<TabGroup>> {
-        if let Some(config_dir) = Self::get_groups_dir() {
-            let groups_file = config_dir.join(GROUPS_FILE);
-            if groups_file.exists() {
-                if let Ok(content) = std::fs::read_to_string(&groups_file) {
-                    if let Ok(groups) = serde_json::from_str::<Vec<TabGroup>>(&content) {
-                        return Some(groups);
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    fn save_groups(&self) {
-        if let Some(config_dir) = Self::get_groups_dir() {
-            let groups_file = config_dir.join(GROUPS_FILE);
-            if let Ok(groups) =
-                serde_json::to_string_pretty(&self.groups.values().collect::<Vec<_>>())
-            {
-                let _ = std::fs::write(&groups_file, groups);
-            }
-        }
-    }
-
-    fn add_group_with_path(&mut self, ctx: egui::Context, path: Option<PathBuf>) {
-        let group_id = self.next_group_id;
-        self.next_group_id += 1;
-
-        let path =
-            path.unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-        let name = TabGroup::name_from_path(&path);
-
-        let group = TabGroup::new(group_id, name, path);
-        self.groups.insert(group_id, group);
-        self.active_group_id = Some(group_id);
-
-        self.add_tab_to_group(group_id, ctx, false);
-    }
-
-    fn rename_group(&mut self, group_id: u64, new_name: String) {
-        if let Some(group) = self.groups.get_mut(&group_id) {
-            group.name = new_name;
-        }
-    }
-
-    fn add_tab_to_group(&mut self, group_id: u64, ctx: egui::Context, is_agent: bool) {
-        let tab_id = self.next_tab_id;
-        self.next_tab_id += 1;
-
-        let group_path = self.groups.get(&group_id).map(|g| g.path.clone());
-        let use_agent = is_agent && Tab::command_exists(&self.default_agent_cmd);
-        let shell_cmd = if use_agent {
-            &self.default_agent_cmd
-        } else {
-            &self.default_shell_cmd
-        };
-        let tab = Tab::new(
-            ctx,
-            self.command_sender.clone(),
-            tab_id,
-            group_path,
-            shell_cmd,
-            use_agent,
-        );
-        self.tabs.insert(tab_id, tab);
-
-        if let Some(group) = self.groups.get_mut(&group_id) {
-            group.tabs.push(TabInfo {
-                id: tab_id,
-                is_agent: use_agent,
-            });
-        }
-
-        self.active_group_id = Some(group_id);
-        self.active_tab_id = Some(tab_id);
-    }
-
-    fn remove_group(&mut self, group_id: u64) {
-        if let Some(group) = self.groups.get(&group_id) {
-            for tab_info in &group.tabs {
-                self.tabs.remove(&tab_info.id);
-            }
-        }
-        self.groups.remove(&group_id);
-
-        if self.active_group_id == Some(group_id) {
-            if let Some(first_group) = self.groups.first_key_value() {
-                self.active_group_id = Some(*first_group.0);
-                self.active_tab_id = first_group.1.tabs.first().map(|t| t.id);
-            } else {
-                self.active_group_id = None;
-                self.active_tab_id = None;
-            }
-        }
-    }
-
-    fn remove(&mut self, id: u64) {
-        let mut group_id_to_remove = None;
-        let mut group_tabs = None;
-
-        for (group_id, group) in &mut self.groups {
-            if group.tabs.iter().any(|t| t.id == id) {
-                group.tabs.retain(|t| t.id != id);
-                self.tabs.remove(&id);
-                group_tabs = Some(group.tabs.clone());
-
-                if group.tabs.is_empty() {
-                    group_id_to_remove = Some(*group_id);
-                }
-                break;
-            }
-        }
-
-        if let Some(group_id) = group_id_to_remove {
-            self.remove_group(group_id);
-            return;
-        }
-
-        if self.active_tab_id == Some(id) {
-            if let Some(tabs) = group_tabs {
-                self.active_tab_id = tabs.last().map(|t| t.id);
-            }
-        }
-    }
-
-    fn clear(&mut self) {
-        self.groups.clear();
-        self.tabs.clear();
-        self.active_group_id = None;
-        self.active_tab_id = None;
-    }
-
-    fn set_title(&mut self, id: u64, title: String) {
-        if let Some(tab) = self.get_tab_mut(id) {
-            tab.set_title(title);
-        }
-    }
-
-    fn set_active_tab(&mut self, id: u64) {
-        self.active_tab_id = Some(id);
-
-        for (group_id, group) in &self.groups {
-            if group.tabs.iter().any(|t| t.id == id) {
-                self.active_group_id = Some(*group_id);
-                break;
-            }
-        }
-
-        if let Some(tab) = self.tabs.get_mut(&id) {
-            let is_alternate = tab.is_alternate_screen();
-            tab.scroll_state.current(is_alternate).user_scrolled_up = false;
-        }
-    }
-
-    fn switch_to_next_tab(&mut self) {
-        if let Some(group_id) = self.active_group_id {
-            if let Some(group) = self.groups.get(&group_id) {
-                let tabs = &group.tabs;
-                if let Some(current_idx) =
-                    tabs.iter().position(|t| Some(t.id) == self.active_tab_id)
-                {
-                    let next_idx = (current_idx + 1) % tabs.len();
-                    let new_tab_id = tabs[next_idx].id;
-                    self.active_tab_id = Some(new_tab_id);
-                    if let Some(tab) = self.tabs.get_mut(&new_tab_id) {
-                        let is_alternate = tab.is_alternate_screen();
-                        tab.scroll_state.current(is_alternate).user_scrolled_up = false;
-                    }
-                }
-            }
-        }
-    }
-
-    fn switch_to_prev_tab(&mut self) {
-        if let Some(group_id) = self.active_group_id {
-            if let Some(group) = self.groups.get(&group_id) {
-                let tabs = &group.tabs;
-                if let Some(current_idx) =
-                    tabs.iter().position(|t| Some(t.id) == self.active_tab_id)
-                {
-                    let prev_idx = if current_idx == 0 {
-                        tabs.len() - 1
-                    } else {
-                        current_idx - 1
-                    };
-                    let new_tab_id = tabs[prev_idx].id;
-                    self.active_tab_id = Some(new_tab_id);
-                    if let Some(tab) = self.tabs.get_mut(&new_tab_id) {
-                        let is_alternate = tab.is_alternate_screen();
-                        tab.scroll_state.current(is_alternate).user_scrolled_up = false;
-                    }
-                }
-            }
-        }
-    }
-
-    fn get_tab_name(&self, group_id: u64, id: u64) -> String {
-        let is_agent = self.tabs.get(&id).map(|t| t.is_agent).unwrap_or(false);
-        if let Some(group) = self.groups.get(&group_id) {
-            for (i, tab_info) in group.tabs.iter().enumerate() {
-                if tab_info.id == id {
-                    return if is_agent {
-                        format!("{}. Agent 💬", i + 1)
-                    } else {
-                        format!("{}. Terminal", i + 1)
-                    };
-                }
-            }
-        }
-        if is_agent {
-            format!("{}. ➕ Agent", id + 1)
-        } else {
-            format!("{}. Terminal", id + 1)
-        }
-    }
-
-    fn get_tab_mut(&mut self, id: u64) -> Option<&mut Tab> {
-        self.tabs.get_mut(&id)
-    }
-
-    fn get_active(&mut self) -> Option<&mut Tab> {
-        let _group_id = self.active_group_id?;
-        let tab_id = self.active_tab_id?;
-
-        self.tabs.get_mut(&tab_id)
-    }
-
-    fn set_default_shell_cmd(&mut self, shell_cmd: String) {
-        self.default_shell_cmd = shell_cmd;
-    }
-
-    fn set_default_agent_cmd(&mut self, agent_cmd: String) {
-        self.default_agent_cmd = agent_cmd;
-    }
-}
-
-#[derive(Serialize, Deserialize, Default)]
-struct Settings {
-    #[serde(default = "default_show_terminal_lines")]
-    show_terminal_lines: bool,
-    #[serde(default = "default_show_fps")]
-    show_fps: bool,
-    #[serde(default = "default_shell_cmd")]
-    default_shell_cmd: String,
-    #[serde(default = "default_agent_cmd")]
-    default_agent_cmd: String,
-}
-
-fn default_show_terminal_lines() -> bool {
-    true
-}
-
-fn default_show_fps() -> bool {
-    true
-}
-
-fn default_shell_cmd() -> String {
-    "/usr/bin/bash".to_string()
-}
-
-fn default_agent_cmd() -> String {
-    "opencode".to_string()
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct TabInfo {
-    id: u64,
-    is_agent: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct TabGroup {
-    id: u64,
-    name: String,
-    path: PathBuf,
-    tabs: Vec<TabInfo>,
-}
-
-impl TabGroup {
-    fn new(id: u64, name: String, path: PathBuf) -> Self {
-        Self {
-            id,
-            name,
-            path,
-            tabs: Vec::new(),
-        }
-    }
-
-    fn name_from_path(path: &PathBuf) -> String {
-        path.file_name()
-            .and_then(|n| n.to_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| path.to_string_lossy().to_string())
-    }
-}
-
-struct Tab {
-    backend: TerminalBackend,
-    title: String,
-    scroll_state: TabScrollState,
-    was_alternate_last_frame: bool,
-    just_created: bool,
-    is_agent: bool,
-}
-
-impl Tab {
-    fn is_alternate_screen(&self) -> bool {
-        self.backend
-            .last_content()
-            .terminal_mode
-            .contains(TerminalMode::ALT_SCREEN)
-    }
-}
-
-impl Tab {
-    fn command_exists(cmd: &str) -> bool {
-        #[cfg(unix)]
-        {
-            use std::process::Command;
-            if let Ok(output) = Command::new("which").arg(cmd).output() {
-                output.status.success()
-            } else {
-                false
-            }
-        }
-        #[cfg(windows)]
-        {
-            use std::process::Command;
-            Command::new("where")
-                .arg(cmd)
-                .output()
-                .map_or(false, |output| output.status.success())
-        }
-    }
-
-    fn resolve_shell(shell_cmd: &str, is_agent: bool) -> String {
-        if shell_cmd.is_empty() {
-            #[cfg(unix)]
-            return std::env::var("SHELL").unwrap_or_else(|_| "/usr/bin/bash".to_string());
-            #[cfg(windows)]
-            return "cmd.exe".to_string();
-        }
-
-        let mut candidates = vec![shell_cmd.to_string()];
-
-        if is_agent {
-            candidates.push("/usr/bin/bash".to_string());
-            candidates.push("bash".to_string());
-        }
-
-        #[cfg(unix)]
-        candidates.push("/usr/bin/bash".to_string());
-        #[cfg(windows)]
-        candidates.push("cmd.exe".to_string());
-
-        for candidate in candidates {
-            if Self::command_exists(&candidate) {
-                return candidate;
-            }
-        }
-
-        #[cfg(unix)]
-        return "/usr/bin/bash".to_string();
-        #[cfg(windows)]
-        return "cmd.exe".to_string();
-    }
-
-    fn new(
-        ctx: egui::Context,
-        command_sender: Sender<(u64, PtyEvent)>,
-        id: u64,
-        working_dir: Option<PathBuf>,
-        shell_cmd: &str,
-        is_agent: bool,
-    ) -> Self {
-        let shell = Self::resolve_shell(shell_cmd, is_agent);
-
-        let backend = TerminalBackend::new(
-            id,
-            ctx,
-            command_sender,
-            egui_term::BackendSettings {
-                shell: shell.clone(),
-                working_directory: working_dir,
-                ..Default::default()
-            },
-        )
-        .expect(&format!(
-            "Failed to create terminal backend with shell: {}",
-            shell
-        ));
-
-        Self {
-            backend,
-            title: format!("tab: {}", id),
-            scroll_state: TabScrollState::default(),
-            was_alternate_last_frame: false,
-            just_created: true,
-            is_agent,
-        }
-    }
-
-    fn set_title(&mut self, title: String) {
-        self.title = title;
+        show_central_panel(ctx, &mut self.tab_manager);
     }
 }

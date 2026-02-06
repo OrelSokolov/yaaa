@@ -4,7 +4,12 @@
 use egui::IconData;
 
 mod app;
+mod config;
+mod constants;
+mod hotkeys;
 mod menu;
+mod terminal;
+mod ui;
 
 const APP_ICON: &[u8] = include_bytes!("icons/app_icon.png");
 
