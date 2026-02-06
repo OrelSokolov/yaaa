@@ -192,9 +192,9 @@ impl eframe::App for App {
                             ui.menu_button("Settings", |ui| {
                                 apply_menu_style(ui);
 
-                                ui.menu_button("General", |ui| {
+                                ui.menu_button("🔧 General", |ui| {
                                     apply_menu_style(ui);
-                                    if ui.button("🔧 Settings...").clicked() {
+                                    if ui.button("💻 Terminal").clicked() {
                                         self.show_settings = true;
                                         ui.close();
                                     }
@@ -202,28 +202,32 @@ impl eframe::App for App {
 
                                 ui.separator();
 
-                                if ui
-                                    .button(if self.show_terminal_lines {
-                                        "🚫 Hide terminal lines"
-                                    } else {
-                                        "📊 Show terminal lines"
-                                    })
-                                    .clicked()
-                                {
-                                    self.show_terminal_lines = !self.show_terminal_lines;
-                                    self.save_settings();
-                                }
-                                if ui
-                                    .button(if self.show_fps {
-                                        "🚫 Hide FPS"
-                                    } else {
-                                        "⚡ Show FPS"
-                                    })
-                                    .clicked()
-                                {
-                                    self.show_fps = !self.show_fps;
-                                    self.save_settings();
-                                }
+                                ui.menu_button("🐛 Debug", |ui| {
+                                    apply_menu_style(ui);
+
+                                    if ui
+                                        .button(if self.show_terminal_lines {
+                                            "🚫 Hide terminal lines"
+                                        } else {
+                                            "📊 Show terminal lines"
+                                        })
+                                        .clicked()
+                                    {
+                                        self.show_terminal_lines = !self.show_terminal_lines;
+                                        self.save_settings();
+                                    }
+                                    if ui
+                                        .button(if self.show_fps {
+                                            "🚫 Hide FPS"
+                                        } else {
+                                            "⚡ Show FPS"
+                                        })
+                                        .clicked()
+                                    {
+                                        self.show_fps = !self.show_fps;
+                                        self.save_settings();
+                                    }
+                                });
                             });
                             ui.menu_button("Help", |ui| {
                                 apply_menu_style(ui);
@@ -448,7 +452,7 @@ impl eframe::App for App {
         let mut group_actions: Vec<(u64, String, Vec<(u64, bool)>)> = Vec::new();
 
         egui::SidePanel::left("left_panel")
-            .default_width(140.0)
+            .default_width(100.0)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
