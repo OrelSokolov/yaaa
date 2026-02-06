@@ -56,3 +56,12 @@ namespace :build do
     puts "Created yaaa_#{VERSION}_#{ARCH}.deb"
   end
 end
+
+namespace :install do
+  desc 'Build and install Debian package'
+  task :deb do
+    Rake::Task['build:deb'].invoke
+    deb_file = Dir.glob('yaaa_*.deb').max_by { |f| File.mtime(f) }
+    sh "sudo dpkg -i #{deb_file}"
+  end
+end
