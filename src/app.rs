@@ -525,7 +525,7 @@ impl eframe::App for App {
                                     }
 
                                     if ui
-                                        .add(egui::Button::new("🗙").min_size(egui::vec2(30.0, 0.0)))
+                                        .add(egui::Button::new("✖").min_size(egui::vec2(30.0, 0.0)))
                                         .clicked()
                                     {
                                         group_actions.push((
@@ -974,7 +974,7 @@ impl TabManager {
             }
         }
         if is_agent {
-            format!("{}. 🤖 Agent", id + 1)
+            format!("{}. ➕ Agent", id + 1)
         } else {
             format!("{}. Terminal", id + 1)
         }
