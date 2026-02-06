@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=YAAA
 Comment=Yet Another AI Agent
-Exec=bash --login -c /usr/bin/yaaa
+Exec=/usr/bin/yaaa
 Icon=yaaa
 Type=Application
 Categories=TerminalEmulator;System;
