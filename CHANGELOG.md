@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.0] - 2025-02-06
+
+### Added
+- Custom shell and agent commands settings
+- Settings window for configuring default shell and agent commands
+- Agent tabs support with Ctrl+Shift+A hotkey
+- Centralized hotkey definitions system
+- Enhanced tab naming to distinguish between Terminal and Agent tabs
+
+### Changed
+- Update egui_term dependency from local path to GitHub repository (OrelSokolov/egui_term)
+- Improved Settings menu organization with submenus (General, Debug)
+- Updated cursor icons on hover for buttons
+- Updated close button icon (× → ✖)
+- Updated About button icon (❓ → ℹ)
+- Refactored tab management to support different tab types
+
 ## [0.1.4] - 2025-02-06
 
 ### Added
