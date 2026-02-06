@@ -1,3 +1,4 @@
+use crate::menu::apply_menu_style;
 use alacritty_terminal::grid::Dimensions;
 use egui_term::{PtyEvent, TerminalBackend, TerminalMode, TerminalView};
 use serde::{Deserialize, Serialize};
@@ -142,10 +143,7 @@ impl eframe::App for App {
 
                 egui::MenuBar::new().ui(ui, |ui| {
                     ui.menu_button("⚙ Settings", |ui| {
-                        ui.style_mut().spacing.button_padding = egui::vec2(12.0, 8.0);
-                        ui.style_mut()
-                            .text_styles
-                            .insert(egui::TextStyle::Button, egui::FontId::proportional(16.0));
+                        apply_menu_style(ui);
 
                         if ui
                             .button(if self.show_terminal_lines {
@@ -171,6 +169,7 @@ impl eframe::App for App {
                         }
                     });
                     ui.menu_button("❓ Help", |ui| {
+                        apply_menu_style(ui);
                         if ui.button("⌘ Hotkeys").clicked() {
                             self.show_hotkeys = true;
                             ui.close();

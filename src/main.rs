@@ -4,6 +4,7 @@
 use egui::IconData;
 
 mod app;
+mod menu;
 
 const APP_ICON: &[u8] = include_bytes!("icons/app_icon.png");
 
