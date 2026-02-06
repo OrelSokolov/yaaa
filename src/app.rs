@@ -730,7 +730,7 @@ impl TabManager {
 
         if self.active_tab_id == Some(id) {
             if let Some(tab_ids) = group_tab_ids {
-                self.active_tab_id = tab_ids.first().copied();
+                self.active_tab_id = tab_ids.last().copied();
             }
         }
     }
