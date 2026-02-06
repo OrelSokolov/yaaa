@@ -457,7 +457,10 @@ impl eframe::App for App {
                         ui.style_mut()
                             .text_styles
                             .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
-                        if ui.button("➕ Add project").clicked() {
+                        let add_project_btn = ui
+                            .button("➕ Add project")
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        if add_project_btn.clicked() {
                             add_group_clicked = true;
                         }
 
@@ -496,7 +499,12 @@ impl eframe::App for App {
                                     }
                                 });
 
-                                if tabs.is_empty() && ui.small_button("×").clicked() {
+                                if tabs.is_empty()
+                                    && ui
+                                        .small_button("×")
+                                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                                        .clicked()
+                                {
                                     group_actions.push((
                                         *group_id,
                                         String::from("remove_group"),
@@ -516,7 +524,10 @@ impl eframe::App for App {
                                     let width = ui.available_width() * 0.9;
                                     let label = egui::Button::selectable(is_active, tab_name)
                                         .min_size(egui::vec2(width, 0.0));
-                                    if ui.add(label).clicked() {
+                                    let response = ui
+                                        .add(label)
+                                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                    if response.clicked() {
                                         group_actions.push((
                                             *group_id,
                                             String::from("select_tab"),
@@ -524,10 +535,10 @@ impl eframe::App for App {
                                         ));
                                     }
 
-                                    if ui
+                                    let close_btn = ui
                                         .add(egui::Button::new("✖").min_size(egui::vec2(30.0, 0.0)))
-                                        .clicked()
-                                    {
+                                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                    if close_btn.clicked() {
                                         group_actions.push((
                                             *group_id,
                                             String::from("remove_tab"),
@@ -538,22 +549,22 @@ impl eframe::App for App {
                             }
 
                             ui.horizontal(|ui| {
-                                if ui
+                                let terminal_btn = ui
                                     .add(
-                                        egui::Button::new("➕ New terminal")
+                                        egui::Button::new("➕ Terminal")
                                             .min_size(egui::vec2(0.0, 16.0)),
                                     )
-                                    .clicked()
-                                {
+                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                if terminal_btn.clicked() {
                                     add_tab_to_group = Some(*group_id);
                                 }
-                                if ui
+                                let agent_btn = ui
                                     .add(
-                                        egui::Button::new("🤖 New agent")
+                                        egui::Button::new("➕ Agent")
                                             .min_size(egui::vec2(0.0, 16.0)),
                                     )
-                                    .clicked()
-                                {
+                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                if agent_btn.clicked() {
                                     add_agent_tab_to_group = Some(*group_id);
                                 }
                             });
