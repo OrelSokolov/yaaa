@@ -133,16 +133,22 @@ impl eframe::App for App {
 
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.style_mut().spacing.button_padding = egui::vec2(10.0, 6.0);
+                //ui.style_mut().spacing.button_padding = egui::vec2(20.0, 10.0);
                 ui.style_mut()
                     .text_styles
-                    .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
+                    .insert(egui::TextStyle::Button, egui::FontId::proportional(16.0));
                 ui.style_mut()
                     .text_styles
-                    .insert(egui::TextStyle::Body, egui::FontId::proportional(15.0));
+                    .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
 
                 egui::MenuBar::new().ui(ui, |ui| {
-                    ui.menu_button("⚙ Settings", |ui| {
+                    ui.style_mut().spacing.button_padding = egui::vec2(6.0, 2.0);
+                    ui.style_mut()
+                        .text_styles
+                        .insert(egui::TextStyle::Button, egui::FontId::proportional(16.0));
+
+                    ui.menu_button("YAAA", |ui| {});
+                    ui.menu_button("Settings", |ui| {
                         apply_menu_style(ui);
 
                         if ui
@@ -168,13 +174,13 @@ impl eframe::App for App {
                             self.save_settings();
                         }
                     });
-                    ui.menu_button("❓ Help", |ui| {
+                    ui.menu_button("Help", |ui| {
                         apply_menu_style(ui);
                         if ui.button("⌘ Hotkeys").clicked() {
                             self.show_hotkeys = true;
                             ui.close();
                         }
-                        if ui.button("🛈 About").clicked() {
+                        if ui.button("❓ About").clicked() {
                             self.show_about = true;
                             ui.close();
                         }
