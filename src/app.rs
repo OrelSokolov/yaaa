@@ -405,6 +405,8 @@ impl eframe::App for App {
                                 }
                             });
 
+                            ui.add_space(10.0);
+
                             for tab_id in tab_ids {
                                 let tab_name = self.tab_manager.get_tab_name(*group_id, *tab_id);
                                 let is_active = active_tab_id == Some(*tab_id);
