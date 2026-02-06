@@ -962,15 +962,22 @@ impl TabManager {
 
     fn get_tab_name(&self, group_id: u64, id: u64) -> String {
         let is_agent = self.tabs.get(&id).map(|t| t.is_agent).unwrap_or(false);
-        let prefix = if is_agent { "🤖 " } else { "" };
         if let Some(group) = self.groups.get(&group_id) {
             for (i, tab_info) in group.tabs.iter().enumerate() {
                 if tab_info.id == id {
-                    return format!("{}Tab{}", prefix, i + 1);
+                    return if is_agent {
+                        format!("{}. Agent", i + 1)
+                    } else {
+                        format!("{}. Terminal", i + 1)
+                    };
                 }
             }
         }
-        format!("{}Tab{}", prefix, id + 1)
+        if is_agent {
+            format!("{}. Agent", id + 1)
+        } else {
+            format!("{}. Terminal", id + 1)
+        }
     }
 
     fn get_tab_mut(&mut self, id: u64) -> Option<&mut Tab> {
