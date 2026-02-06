@@ -350,100 +350,105 @@ impl eframe::App for App {
         egui::SidePanel::left("left_panel")
             .default_width(140.0)
             .show(ctx, |ui| {
-                ui.style_mut().spacing.interact_size = egui::vec2(120.0, 24.0);
-                ui.style_mut()
-                    .text_styles
-                    .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
-                if ui.button("➕ Add project").clicked() {
-                    add_group_clicked = true;
-                }
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.style_mut().spacing.interact_size = egui::vec2(120.0, 24.0);
+                        ui.style_mut()
+                            .text_styles
+                            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+                        if ui.button("➕ Add project").clicked() {
+                            add_group_clicked = true;
+                        }
 
-                ui.separator();
+                        ui.separator();
 
-                for (group_id, group_name, tab_ids) in &groups_to_render {
-                    let is_selected = active_group_id == Some(*group_id);
+                        for (group_id, group_name, tab_ids) in &groups_to_render {
+                            let is_selected = active_group_id == Some(*group_id);
 
-                    ui.horizontal(|ui| {
-                        ui.centered_and_justified(|ui| {
-                            let sense = egui::Sense::click_and_drag();
-                            let response = ui.allocate_rect(ui.available_rect_before_wrap(), sense);
+                            ui.horizontal(|ui| {
+                                ui.centered_and_justified(|ui| {
+                                    let sense = egui::Sense::click_and_drag();
+                                    let response =
+                                        ui.allocate_rect(ui.available_rect_before_wrap(), sense);
 
-                            let text_color = if response.hovered() {
-                                ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
-                                egui::Color32::LIGHT_BLUE
-                            } else if is_selected {
-                                ui.visuals().selection.stroke.color
-                            } else {
-                                ui.visuals().text_color()
-                            };
+                                    let text_color = if response.hovered() {
+                                        ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
+                                        egui::Color32::LIGHT_BLUE
+                                    } else if is_selected {
+                                        ui.visuals().selection.stroke.color
+                                    } else {
+                                        ui.visuals().text_color()
+                                    };
 
-                            ui.painter().text(
-                                response.rect.center(),
-                                egui::Align2::CENTER_CENTER,
-                                group_name,
-                                egui::FontId::proportional(18.0),
-                                text_color,
-                            );
+                                    ui.painter().text(
+                                        response.rect.center(),
+                                        egui::Align2::CENTER_CENTER,
+                                        group_name,
+                                        egui::FontId::proportional(18.0),
+                                        text_color,
+                                    );
 
-                            if response.clicked() {
-                                self.rename_group_id = Some(*group_id);
-                                self.rename_group_name = group_name.clone();
-                                self.show_rename_group = true;
+                                    if response.clicked() {
+                                        self.rename_group_id = Some(*group_id);
+                                        self.rename_group_name = group_name.clone();
+                                        self.show_rename_group = true;
+                                    }
+                                });
+
+                                if tab_ids.is_empty() && ui.small_button("×").clicked() {
+                                    group_actions.push((
+                                        *group_id,
+                                        String::from("remove_group"),
+                                        Vec::new(),
+                                    ));
+                                }
+                            });
+
+                            for tab_id in tab_ids {
+                                let tab_name = self.tab_manager.get_tab_name(*group_id, *tab_id);
+                                let is_active = active_tab_id == Some(*tab_id);
+
+                                ui.horizontal(|ui| {
+                                    let width = ui.available_width() * 0.9;
+                                    let label = egui::Button::selectable(is_active, tab_name)
+                                        .min_size(egui::vec2(width, 0.0));
+                                    if ui.add(label).clicked() {
+                                        group_actions.push((
+                                            *group_id,
+                                            String::from("select_tab"),
+                                            vec![(*tab_id, false)],
+                                        ));
+                                    }
+
+                                    if ui
+                                        .add(egui::Button::new("🗙").min_size(egui::vec2(30.0, 0.0)))
+                                        .clicked()
+                                    {
+                                        group_actions.push((
+                                            *group_id,
+                                            String::from("remove_tab"),
+                                            vec![(*tab_id, false)],
+                                        ));
+                                    }
+                                });
                             }
-                        });
 
-                        if tab_ids.is_empty() && ui.small_button("×").clicked() {
-                            group_actions.push((
-                                *group_id,
-                                String::from("remove_group"),
-                                Vec::new(),
-                            ));
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .add(
+                                        egui::Button::new("➕ New terminal")
+                                            .min_size(egui::vec2(0.0, 16.0)),
+                                    )
+                                    .clicked()
+                                {
+                                    add_tab_to_group = Some(*group_id);
+                                }
+                            });
+
+                            ui.separator();
                         }
                     });
-
-                    for tab_id in tab_ids {
-                        let tab_name = self.tab_manager.get_tab_name(*group_id, *tab_id);
-                        let is_active = active_tab_id == Some(*tab_id);
-
-                        ui.horizontal(|ui| {
-                            let width = ui.available_width() * 0.9;
-                            let label = egui::Button::selectable(is_active, tab_name)
-                                .min_size(egui::vec2(width, 0.0));
-                            if ui.add(label).clicked() {
-                                group_actions.push((
-                                    *group_id,
-                                    String::from("select_tab"),
-                                    vec![(*tab_id, false)],
-                                ));
-                            }
-
-                            if ui
-                                .add(egui::Button::new("🗙").min_size(egui::vec2(30.0, 0.0)))
-                                .clicked()
-                            {
-                                group_actions.push((
-                                    *group_id,
-                                    String::from("remove_tab"),
-                                    vec![(*tab_id, false)],
-                                ));
-                            }
-                        });
-                    }
-
-                    ui.horizontal(|ui| {
-                        if ui
-                            .add(
-                                egui::Button::new("➕ New terminal")
-                                    .min_size(egui::vec2(0.0, 16.0)),
-                            )
-                            .clicked()
-                        {
-                            add_tab_to_group = Some(*group_id);
-                        }
-                    });
-
-                    ui.separator();
-                }
             });
 
         for action in group_actions {
