@@ -311,22 +311,28 @@ impl eframe::App for App {
                 for (group_id, group_name, tab_ids) in &groups_to_render {
                     let is_selected = active_group_id == Some(*group_id);
 
-                    if is_selected {
-                        ui.style_mut().visuals.override_text_color =
-                            Some(ui.visuals().selection.stroke.color);
-                    }
-
                     ui.horizontal(|ui| {
                         ui.centered_and_justified(|ui| {
-                            let response = ui.add(
-                                egui::Button::new(
-                                    egui::RichText::new(group_name.clone()).strong().size(18.0),
-                                )
-                                .frame(false),
-                            );
-                            if response.hovered() {
+                            let sense = egui::Sense::click_and_drag();
+                            let response = ui.allocate_rect(ui.available_rect_before_wrap(), sense);
+
+                            let text_color = if response.hovered() {
                                 ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
-                            }
+                                egui::Color32::LIGHT_BLUE
+                            } else if is_selected {
+                                ui.visuals().selection.stroke.color
+                            } else {
+                                ui.visuals().text_color()
+                            };
+
+                            ui.painter().text(
+                                response.rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                group_name,
+                                egui::FontId::proportional(18.0),
+                                text_color,
+                            );
+
                             if response.clicked() {
                                 self.rename_group_id = Some(*group_id);
                                 self.rename_group_name = group_name.clone();
@@ -342,10 +348,6 @@ impl eframe::App for App {
                             ));
                         }
                     });
-
-                    if is_selected {
-                        ui.style_mut().visuals.override_text_color = None;
-                    }
 
                     for tab_id in tab_ids {
                         let tab_name = self.tab_manager.get_tab_name(*group_id, *tab_id);
