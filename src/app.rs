@@ -131,68 +131,73 @@ impl eframe::App for App {
             self.tab_manager.clear();
         }
 
-        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-            ui.add_space(4.0);
-            ui.vertical(|ui| {
-                ui.add_space(2.0);
-                ui.horizontal(|ui| {
-                    //ui.style_mut().spacing.button_padding = egui::vec2(20.0, 10.0);
-                    ui.style_mut()
-                        .text_styles
-                        .insert(egui::TextStyle::Button, egui::FontId::proportional(16.0));
-                    ui.style_mut()
-                        .text_styles
-                        .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
-
-                    egui::MenuBar::new().ui(ui, |ui| {
-                        ui.style_mut().spacing.button_padding = egui::vec2(6.0, 2.0);
+        egui::TopBottomPanel::top("menu_bar")
+            .frame(egui::Frame {
+                fill: egui::Color32::from_rgb(0x20, 0x20, 0x20),
+                ..Default::default()
+            })
+            .show(ctx, |ui| {
+                ui.add_space(4.0);
+                ui.vertical(|ui| {
+                    ui.add_space(2.0);
+                    ui.horizontal(|ui| {
+                        //ui.style_mut().spacing.button_padding = egui::vec2(20.0, 10.0);
                         ui.style_mut()
                             .text_styles
-                            .insert(egui::TextStyle::Button, egui::FontId::proportional(14.0));
+                            .insert(egui::TextStyle::Button, egui::FontId::proportional(16.0));
+                        ui.style_mut()
+                            .text_styles
+                            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
 
-                        ui.menu_button("YAAA", |ui| {});
-                        ui.menu_button("Settings", |ui| {
-                            apply_menu_style(ui);
+                        egui::MenuBar::new().ui(ui, |ui| {
+                            ui.style_mut().spacing.button_padding = egui::vec2(6.0, 2.0);
+                            ui.style_mut()
+                                .text_styles
+                                .insert(egui::TextStyle::Button, egui::FontId::proportional(14.0));
 
-                            if ui
-                                .button(if self.show_terminal_lines {
-                                    "🚫 Hide terminal lines"
-                                } else {
-                                    "📊 Show terminal lines"
-                                })
-                                .clicked()
-                            {
-                                self.show_terminal_lines = !self.show_terminal_lines;
-                                self.save_settings();
-                            }
-                            if ui
-                                .button(if self.show_fps {
-                                    "🚫 Hide FPS"
-                                } else {
-                                    "⚡ Show FPS"
-                                })
-                                .clicked()
-                            {
-                                self.show_fps = !self.show_fps;
-                                self.save_settings();
-                            }
-                        });
-                        ui.menu_button("Help", |ui| {
-                            apply_menu_style(ui);
-                            if ui.button("⌘ Hotkeys").clicked() {
-                                self.show_hotkeys = true;
-                                ui.close();
-                            }
-                            if ui.button("❓ About").clicked() {
-                                self.show_about = true;
-                                ui.close();
-                            }
+                            ui.menu_button("YAAA", |ui| {});
+                            ui.menu_button("Settings", |ui| {
+                                apply_menu_style(ui);
+
+                                if ui
+                                    .button(if self.show_terminal_lines {
+                                        "🚫 Hide terminal lines"
+                                    } else {
+                                        "📊 Show terminal lines"
+                                    })
+                                    .clicked()
+                                {
+                                    self.show_terminal_lines = !self.show_terminal_lines;
+                                    self.save_settings();
+                                }
+                                if ui
+                                    .button(if self.show_fps {
+                                        "🚫 Hide FPS"
+                                    } else {
+                                        "⚡ Show FPS"
+                                    })
+                                    .clicked()
+                                {
+                                    self.show_fps = !self.show_fps;
+                                    self.save_settings();
+                                }
+                            });
+                            ui.menu_button("Help", |ui| {
+                                apply_menu_style(ui);
+                                if ui.button("⌘ Hotkeys").clicked() {
+                                    self.show_hotkeys = true;
+                                    ui.close();
+                                }
+                                if ui.button("❓ About").clicked() {
+                                    self.show_about = true;
+                                    ui.close();
+                                }
+                            });
                         });
                     });
+                    ui.add_space(4.0);
                 });
-                ui.add_space(4.0);
             });
-        });
 
         if self.show_fps || self.show_terminal_lines {
             egui::TopBottomPanel::bottom("debug_panel").show(ctx, |ui| {
