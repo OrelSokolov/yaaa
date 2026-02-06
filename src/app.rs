@@ -74,6 +74,11 @@ pub struct App {
     rename_group_name: String,
     show_terminal_lines: bool,
     show_fps: bool,
+    show_settings: bool,
+    editing_default_shell_cmd: String,
+    editing_default_agent_cmd: String,
+    saved_default_shell_cmd: String,
+    saved_default_agent_cmd: String,
 }
 
 impl App {
@@ -83,6 +88,11 @@ impl App {
         let tab_manager = TabManager::new(command_sender_clone, cc);
 
         let settings = Self::load_settings();
+
+        let editing_default_shell_cmd = settings.default_shell_cmd.clone();
+        let editing_default_agent_cmd = settings.default_agent_cmd.clone();
+        let saved_default_shell_cmd = editing_default_shell_cmd.clone();
+        let saved_default_agent_cmd = editing_default_agent_cmd.clone();
 
         Self {
             _command_sender: command_sender,
@@ -95,6 +105,11 @@ impl App {
             rename_group_name: String::new(),
             show_terminal_lines: settings.show_terminal_lines,
             show_fps: settings.show_fps,
+            show_settings: false,
+            editing_default_shell_cmd,
+            editing_default_agent_cmd,
+            saved_default_shell_cmd,
+            saved_default_agent_cmd,
         }
     }
 
@@ -126,6 +141,8 @@ impl App {
             let settings = Settings {
                 show_terminal_lines: self.show_terminal_lines,
                 show_fps: self.show_fps,
+                default_shell_cmd: self.editing_default_shell_cmd.clone(),
+                default_agent_cmd: self.editing_default_agent_cmd.clone(),
             };
             if let Ok(settings_json) = serde_json::to_string_pretty(&settings) {
                 let _ = std::fs::write(&settings_file, settings_json);
@@ -164,9 +181,19 @@ impl eframe::App for App {
                                 .text_styles
                                 .insert(egui::TextStyle::Button, egui::FontId::proportional(14.0));
 
-                            ui.menu_button("YAAA", |ui| {});
+                            ui.menu_button("YAAA", |_ui| {});
                             ui.menu_button("Settings", |ui| {
                                 apply_menu_style(ui);
+
+                                ui.menu_button("General", |ui| {
+                                    apply_menu_style(ui);
+                                    if ui.button("⚙️ Settings...").clicked() {
+                                        self.show_settings = true;
+                                        ui.close();
+                                    }
+                                });
+
+                                ui.separator();
 
                                 if ui
                                     .button(if self.show_terminal_lines {
@@ -310,6 +337,52 @@ impl eframe::App for App {
         if should_close {
             self.show_rename_group = false;
             self.rename_group_id = None;
+        }
+
+        let mut settings_save = false;
+        let mut settings_cancel = false;
+        egui::Window::new("Settings")
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut self.show_settings)
+            .show(ctx, |ui| {
+                ui.heading("General Settings");
+                ui.add_space(10.0);
+
+                ui.label("Default shell cmd:");
+                ui.text_edit_singleline(&mut self.editing_default_shell_cmd);
+
+                ui.add_space(5.0);
+
+                ui.label("Default agent cmd:");
+                ui.text_edit_singleline(&mut self.editing_default_agent_cmd);
+
+                ui.add_space(15.0);
+
+                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    settings_cancel = true;
+                }
+
+                ui.horizontal(|ui| {
+                    if ui.button("Save").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                    {
+                        settings_save = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        settings_cancel = true;
+                    }
+                });
+            });
+
+        if settings_save {
+            self.saved_default_shell_cmd = self.editing_default_shell_cmd.clone();
+            self.saved_default_agent_cmd = self.editing_default_agent_cmd.clone();
+            self.save_settings();
+            self.show_settings = false;
+        }
+        if settings_cancel {
+            self.editing_default_shell_cmd = self.saved_default_shell_cmd.clone();
+            self.editing_default_agent_cmd = self.saved_default_agent_cmd.clone();
+            self.show_settings = false;
         }
 
         if let Ok((tab_id, event)) = self.command_receiver.try_recv() {
@@ -542,7 +615,11 @@ impl eframe::App for App {
 
                         let should_block_input = tab.just_created;
                         let terminal = TerminalView::new(ui, &mut tab.backend)
-                            .set_focus(!self.show_rename_group && !should_block_input)
+                            .set_focus(
+                                !self.show_rename_group
+                                    && !self.show_settings
+                                    && !should_block_input,
+                            )
                             .set_size(ui.available_size());
 
                         ui.add(terminal);
@@ -849,6 +926,10 @@ struct Settings {
     show_terminal_lines: bool,
     #[serde(default = "default_show_fps")]
     show_fps: bool,
+    #[serde(default = "default_shell_cmd")]
+    default_shell_cmd: String,
+    #[serde(default = "default_agent_cmd")]
+    default_agent_cmd: String,
 }
 
 fn default_show_terminal_lines() -> bool {
@@ -857,6 +938,14 @@ fn default_show_terminal_lines() -> bool {
 
 fn default_show_fps() -> bool {
     true
+}
+
+fn default_shell_cmd() -> String {
+    "/usr/bin/bash".to_string()
+}
+
+fn default_agent_cmd() -> String {
+    "opencode".to_string()
 }
 
 #[derive(Serialize, Deserialize, Clone)]
