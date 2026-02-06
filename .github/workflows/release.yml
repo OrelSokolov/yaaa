@@ -21,6 +21,9 @@ jobs:
           profile: minimal
           toolchain: stable
 
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
       - name: Build Release
         run: cargo build --release --locked
 
