@@ -62,7 +62,8 @@ pub struct App {
     show_rename_group: bool,
     rename_group_id: Option<u64>,
     rename_group_name: String,
-    show_debug: bool,
+    show_terminal_lines: bool,
+    show_fps: bool,
 }
 
 impl App {
@@ -82,7 +83,8 @@ impl App {
             show_rename_group: false,
             rename_group_id: None,
             rename_group_name: String::new(),
-            show_debug: settings.show_debug,
+            show_terminal_lines: settings.show_terminal_lines,
+            show_fps: settings.show_fps,
         }
     }
 
@@ -112,7 +114,8 @@ impl App {
         if let Some(config_dir) = Self::get_config_dir() {
             let settings_file = config_dir.join(SETTINGS_FILE);
             let settings = Settings {
-                show_debug: self.show_debug,
+                show_terminal_lines: self.show_terminal_lines,
+                show_fps: self.show_fps,
             };
             if let Ok(settings_json) = serde_json::to_string_pretty(&settings) {
                 let _ = std::fs::write(&settings_file, settings_json);
@@ -129,19 +132,42 @@ impl eframe::App for App {
 
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
+                ui.style_mut().spacing.button_padding = egui::vec2(10.0, 6.0);
+                ui.style_mut()
+                    .text_styles
+                    .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
+                ui.style_mut()
+                    .text_styles
+                    .insert(egui::TextStyle::Body, egui::FontId::proportional(15.0));
+
                 egui::MenuBar::new().ui(ui, |ui| {
                     ui.menu_button("⚙ Settings", |ui| {
+                        ui.style_mut().spacing.button_padding = egui::vec2(12.0, 8.0);
+                        ui.style_mut()
+                            .text_styles
+                            .insert(egui::TextStyle::Button, egui::FontId::proportional(16.0));
+
                         if ui
-                            .button(if self.show_debug {
-                                "🚫 Hide debug"
+                            .button(if self.show_terminal_lines {
+                                "🚫 Hide terminal lines"
                             } else {
-                                "🐞 Show debug"
+                                "📊 Show terminal lines"
                             })
                             .clicked()
                         {
-                            self.show_debug = !self.show_debug;
+                            self.show_terminal_lines = !self.show_terminal_lines;
                             self.save_settings();
-                            ui.close();
+                        }
+                        if ui
+                            .button(if self.show_fps {
+                                "🚫 Hide FPS"
+                            } else {
+                                "⚡ Show FPS"
+                            })
+                            .clicked()
+                        {
+                            self.show_fps = !self.show_fps;
+                            self.save_settings();
                         }
                     });
                     ui.menu_button("❓ Help", |ui| {
@@ -157,9 +183,14 @@ impl eframe::App for App {
                 });
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if self.show_debug {
-                        let fps = ctx.input(|i| 1.0 / i.stable_dt);
+                    let mut debug_parts = Vec::new();
 
+                    if self.show_fps {
+                        let fps = ctx.input(|i| 1.0 / i.stable_dt);
+                        debug_parts.push(format!("FPS: {:.1}", fps));
+                    }
+
+                    if self.show_terminal_lines {
                         if let Some(tab) = self.tab_manager.get_active() {
                             let content = tab.backend.last_content();
                             let total_lines = tab.backend.total_lines();
@@ -170,13 +201,15 @@ impl eframe::App for App {
                                 .saturating_sub(display_offset)
                                 .saturating_sub(view_size);
 
-                            ui.label(format!(
-                                "📊 Lines: {} | Top: {} | Bottom: {} | View: {} | FPS: {:.1}",
-                                total_lines, from_top, from_bottom, view_size, fps
+                            debug_parts.push(format!(
+                                "Lines: {} | Top: {} | Bottom: {} | View: {}",
+                                total_lines, from_top, from_bottom, view_size
                             ));
-                        } else {
-                            ui.label(format!("FPS: {:.1}", fps));
                         }
+                    }
+
+                    if !debug_parts.is_empty() {
+                        ui.label(format!("📊 {}", debug_parts.join(" | ")));
                     }
                 });
             });
@@ -776,11 +809,17 @@ impl TabManager {
 
 #[derive(Serialize, Deserialize, Default)]
 struct Settings {
-    #[serde(default = "default_show_debug")]
-    show_debug: bool,
+    #[serde(default = "default_show_terminal_lines")]
+    show_terminal_lines: bool,
+    #[serde(default = "default_show_fps")]
+    show_fps: bool,
 }
 
-fn default_show_debug() -> bool {
+fn default_show_terminal_lines() -> bool {
+    true
+}
+
+fn default_show_fps() -> bool {
     true
 }
 
