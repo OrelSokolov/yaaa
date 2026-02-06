@@ -16,6 +16,7 @@ fn get_hotkeys() -> std::collections::BTreeMap<&'static str, &'static str> {
     hotkeys.insert("Ctrl + Tab", "Switch to next tab");
     hotkeys.insert("Ctrl + Shift + Tab", "Switch to previous tab");
     hotkeys.insert("Ctrl + Shift + N", "Add new terminal tab");
+    hotkeys.insert("Ctrl + Shift + A", "Add new agent tab");
     hotkeys.insert("Ctrl + Shift + Q", "Close current tab");
     hotkeys
 }
@@ -88,8 +89,12 @@ impl App {
 
         let settings = Self::load_settings();
 
-        let tab_manager =
-            TabManager::new(command_sender_clone, cc, settings.default_shell_cmd.clone());
+        let tab_manager = TabManager::new(
+            command_sender_clone,
+            cc,
+            settings.default_shell_cmd.clone(),
+            settings.default_agent_cmd.clone(),
+        );
 
         let editing_default_shell_cmd = settings.default_shell_cmd.clone();
         let editing_default_agent_cmd = settings.default_agent_cmd.clone();
@@ -380,6 +385,8 @@ impl eframe::App for App {
             self.saved_default_agent_cmd = self.editing_default_agent_cmd.clone();
             self.tab_manager
                 .set_default_shell_cmd(self.editing_default_shell_cmd.clone());
+            self.tab_manager
+                .set_default_agent_cmd(self.editing_default_agent_cmd.clone());
             self.save_settings();
             self.show_settings = false;
         }
@@ -403,15 +410,16 @@ impl eframe::App for App {
 
         let active_group_id = self.tab_manager.active_group_id;
         let active_tab_id = self.tab_manager.active_tab_id;
-        let groups_to_render: Vec<(u64, String, Vec<u64>)> = self
+        let groups_to_render: Vec<(u64, String, Vec<TabInfo>)> = self
             .tab_manager
             .groups
             .iter()
-            .map(|(id, g)| (*id, g.name.clone(), g.tab_ids.clone()))
+            .map(|(id, g)| (*id, g.name.clone(), g.tabs.clone()))
             .collect();
 
         let mut add_group_clicked = false;
         let mut add_tab_to_group: Option<u64> = None;
+        let mut add_agent_tab_to_group: Option<u64> = None;
 
         let input = ctx.input(|i| i.clone());
         if input.key_pressed(egui::Key::Tab) && input.modifiers.ctrl {
@@ -424,6 +432,11 @@ impl eframe::App for App {
         if input.key_pressed(egui::Key::N) && input.modifiers.ctrl && input.modifiers.shift {
             if let Some(group_id) = self.tab_manager.active_group_id {
                 add_tab_to_group = Some(group_id);
+            }
+        }
+        if input.key_pressed(egui::Key::A) && input.modifiers.ctrl && input.modifiers.shift {
+            if let Some(group_id) = self.tab_manager.active_group_id {
+                add_agent_tab_to_group = Some(group_id);
             }
         }
         if input.key_pressed(egui::Key::Q) && input.modifiers.ctrl && input.modifiers.shift {
@@ -450,7 +463,7 @@ impl eframe::App for App {
 
                         ui.separator();
 
-                        for (group_id, group_name, tab_ids) in &groups_to_render {
+                        for (group_id, group_name, tabs) in &groups_to_render {
                             let is_selected = active_group_id == Some(*group_id);
 
                             ui.horizontal(|ui| {
@@ -483,7 +496,7 @@ impl eframe::App for App {
                                     }
                                 });
 
-                                if tab_ids.is_empty() && ui.small_button("×").clicked() {
+                                if tabs.is_empty() && ui.small_button("×").clicked() {
                                     group_actions.push((
                                         *group_id,
                                         String::from("remove_group"),
@@ -494,9 +507,10 @@ impl eframe::App for App {
 
                             ui.add_space(10.0);
 
-                            for tab_id in tab_ids {
-                                let tab_name = self.tab_manager.get_tab_name(*group_id, *tab_id);
-                                let is_active = active_tab_id == Some(*tab_id);
+                            for tab_info in tabs {
+                                let tab_id = tab_info.id;
+                                let tab_name = self.tab_manager.get_tab_name(*group_id, tab_id);
+                                let is_active = active_tab_id == Some(tab_id);
 
                                 ui.horizontal(|ui| {
                                     let width = ui.available_width() * 0.9;
@@ -506,7 +520,7 @@ impl eframe::App for App {
                                         group_actions.push((
                                             *group_id,
                                             String::from("select_tab"),
-                                            vec![(*tab_id, false)],
+                                            vec![(tab_id, false)],
                                         ));
                                     }
 
@@ -517,7 +531,7 @@ impl eframe::App for App {
                                         group_actions.push((
                                             *group_id,
                                             String::from("remove_tab"),
-                                            vec![(*tab_id, false)],
+                                            vec![(tab_id, false)],
                                         ));
                                     }
                                 });
@@ -532,6 +546,15 @@ impl eframe::App for App {
                                     .clicked()
                                 {
                                     add_tab_to_group = Some(*group_id);
+                                }
+                                if ui
+                                    .add(
+                                        egui::Button::new("🤖 New agent")
+                                            .min_size(egui::vec2(0.0, 16.0)),
+                                    )
+                                    .clicked()
+                                {
+                                    add_agent_tab_to_group = Some(*group_id);
                                 }
                             });
 
@@ -578,7 +601,14 @@ impl eframe::App for App {
         }
 
         if let Some(group_id) = add_tab_to_group {
-            self.tab_manager.add_tab_to_group(group_id, ctx.clone());
+            self.tab_manager
+                .add_tab_to_group(group_id, ctx.clone(), false);
+            self.tab_manager.save_groups();
+        }
+
+        if let Some(group_id) = add_agent_tab_to_group {
+            self.tab_manager
+                .add_tab_to_group(group_id, ctx.clone(), true);
             self.tab_manager.save_groups();
         }
 
@@ -658,6 +688,7 @@ struct TabManager {
     next_group_id: u64,
     next_tab_id: u64,
     default_shell_cmd: String,
+    default_agent_cmd: String,
 }
 
 impl TabManager {
@@ -665,6 +696,7 @@ impl TabManager {
         command_sender: Sender<(u64, PtyEvent)>,
         cc: &eframe::CreationContext<'_>,
         default_shell_cmd: String,
+        default_agent_cmd: String,
     ) -> Self {
         let mut manager = Self {
             command_sender,
@@ -675,6 +707,7 @@ impl TabManager {
             next_group_id: 0,
             next_tab_id: 0,
             default_shell_cmd,
+            default_agent_cmd,
         };
 
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -682,22 +715,28 @@ impl TabManager {
         if let Some(groups_data) = manager.load_groups() {
             for group in groups_data {
                 manager.next_group_id = manager.next_group_id.max(group.id + 1);
-                for &tab_id in &group.tab_ids {
-                    manager.next_tab_id = manager.next_tab_id.max(tab_id + 1);
+                for tab_info in &group.tabs {
+                    manager.next_tab_id = manager.next_tab_id.max(tab_info.id + 1);
+                    let shell_cmd = if tab_info.is_agent {
+                        &manager.default_agent_cmd
+                    } else {
+                        &manager.default_shell_cmd
+                    };
                     let tab = Tab::new(
                         cc.egui_ctx.clone(),
                         manager.command_sender.clone(),
-                        tab_id,
+                        tab_info.id,
                         Some(group.path.clone()),
-                        &manager.default_shell_cmd,
+                        shell_cmd,
+                        tab_info.is_agent,
                     );
-                    manager.tabs.insert(tab_id, tab);
+                    manager.tabs.insert(tab_info.id, tab);
                 }
                 manager.groups.insert(group.id, group);
             }
             if let Some(first_group) = manager.groups.first_key_value() {
                 manager.active_group_id = Some(*first_group.0);
-                manager.active_tab_id = first_group.1.tab_ids.first().copied();
+                manager.active_tab_id = first_group.1.tabs.first().map(|t| t.id);
             }
         }
 
@@ -711,7 +750,7 @@ impl TabManager {
             manager.groups.insert(group_id, group);
             manager.active_group_id = Some(group_id);
 
-            manager.add_tab_to_group(group_id, cc.egui_ctx.clone());
+            manager.add_tab_to_group(group_id, cc.egui_ctx.clone(), false);
         }
 
         manager
@@ -762,7 +801,7 @@ impl TabManager {
         self.groups.insert(group_id, group);
         self.active_group_id = Some(group_id);
 
-        self.add_tab_to_group(group_id, ctx);
+        self.add_tab_to_group(group_id, ctx, false);
     }
 
     fn rename_group(&mut self, group_id: u64, new_name: String) {
@@ -771,22 +810,31 @@ impl TabManager {
         }
     }
 
-    fn add_tab_to_group(&mut self, group_id: u64, ctx: egui::Context) {
+    fn add_tab_to_group(&mut self, group_id: u64, ctx: egui::Context, is_agent: bool) {
         let tab_id = self.next_tab_id;
         self.next_tab_id += 1;
 
         let group_path = self.groups.get(&group_id).map(|g| g.path.clone());
+        let shell_cmd = if is_agent {
+            &self.default_agent_cmd
+        } else {
+            &self.default_shell_cmd
+        };
         let tab = Tab::new(
             ctx,
             self.command_sender.clone(),
             tab_id,
             group_path,
-            &self.default_shell_cmd,
+            shell_cmd,
+            is_agent,
         );
         self.tabs.insert(tab_id, tab);
 
         if let Some(group) = self.groups.get_mut(&group_id) {
-            group.tab_ids.push(tab_id);
+            group.tabs.push(TabInfo {
+                id: tab_id,
+                is_agent,
+            });
         }
 
         self.active_group_id = Some(group_id);
@@ -795,8 +843,8 @@ impl TabManager {
 
     fn remove_group(&mut self, group_id: u64) {
         if let Some(group) = self.groups.get(&group_id) {
-            for tab_id in &group.tab_ids {
-                self.tabs.remove(tab_id);
+            for tab_info in &group.tabs {
+                self.tabs.remove(&tab_info.id);
             }
         }
         self.groups.remove(&group_id);
@@ -804,7 +852,7 @@ impl TabManager {
         if self.active_group_id == Some(group_id) {
             if let Some(first_group) = self.groups.first_key_value() {
                 self.active_group_id = Some(*first_group.0);
-                self.active_tab_id = first_group.1.tab_ids.first().copied();
+                self.active_tab_id = first_group.1.tabs.first().map(|t| t.id);
             } else {
                 self.active_group_id = None;
                 self.active_tab_id = None;
@@ -814,15 +862,15 @@ impl TabManager {
 
     fn remove(&mut self, id: u64) {
         let mut group_id_to_remove = None;
-        let mut group_tab_ids = None;
+        let mut group_tabs = None;
 
         for (group_id, group) in &mut self.groups {
-            if group.tab_ids.contains(&id) {
-                group.tab_ids.retain(|t| t != &id);
+            if group.tabs.iter().any(|t| t.id == id) {
+                group.tabs.retain(|t| t.id != id);
                 self.tabs.remove(&id);
-                group_tab_ids = Some(group.tab_ids.clone());
+                group_tabs = Some(group.tabs.clone());
 
-                if group.tab_ids.is_empty() {
+                if group.tabs.is_empty() {
                     group_id_to_remove = Some(*group_id);
                 }
                 break;
@@ -835,8 +883,8 @@ impl TabManager {
         }
 
         if self.active_tab_id == Some(id) {
-            if let Some(tab_ids) = group_tab_ids {
-                self.active_tab_id = tab_ids.last().copied();
+            if let Some(tabs) = group_tabs {
+                self.active_tab_id = tabs.last().map(|t| t.id);
             }
         }
     }
@@ -858,7 +906,7 @@ impl TabManager {
         self.active_tab_id = Some(id);
 
         for (group_id, group) in &self.groups {
-            if group.tab_ids.contains(&id) {
+            if group.tabs.iter().any(|t| t.id == id) {
                 self.active_group_id = Some(*group_id);
                 break;
             }
@@ -873,13 +921,12 @@ impl TabManager {
     fn switch_to_next_tab(&mut self) {
         if let Some(group_id) = self.active_group_id {
             if let Some(group) = self.groups.get(&group_id) {
-                let tab_ids = &group.tab_ids;
-                if let Some(current_idx) = tab_ids
-                    .iter()
-                    .position(|&id| Some(id) == self.active_tab_id)
+                let tabs = &group.tabs;
+                if let Some(current_idx) =
+                    tabs.iter().position(|t| Some(t.id) == self.active_tab_id)
                 {
-                    let next_idx = (current_idx + 1) % tab_ids.len();
-                    let new_tab_id = tab_ids[next_idx];
+                    let next_idx = (current_idx + 1) % tabs.len();
+                    let new_tab_id = tabs[next_idx].id;
                     self.active_tab_id = Some(new_tab_id);
                     if let Some(tab) = self.tabs.get_mut(&new_tab_id) {
                         let is_alternate = tab.is_alternate_screen();
@@ -893,17 +940,16 @@ impl TabManager {
     fn switch_to_prev_tab(&mut self) {
         if let Some(group_id) = self.active_group_id {
             if let Some(group) = self.groups.get(&group_id) {
-                let tab_ids = &group.tab_ids;
-                if let Some(current_idx) = tab_ids
-                    .iter()
-                    .position(|&id| Some(id) == self.active_tab_id)
+                let tabs = &group.tabs;
+                if let Some(current_idx) =
+                    tabs.iter().position(|t| Some(t.id) == self.active_tab_id)
                 {
                     let prev_idx = if current_idx == 0 {
-                        tab_ids.len() - 1
+                        tabs.len() - 1
                     } else {
                         current_idx - 1
                     };
-                    let new_tab_id = tab_ids[prev_idx];
+                    let new_tab_id = tabs[prev_idx].id;
                     self.active_tab_id = Some(new_tab_id);
                     if let Some(tab) = self.tabs.get_mut(&new_tab_id) {
                         let is_alternate = tab.is_alternate_screen();
@@ -915,14 +961,16 @@ impl TabManager {
     }
 
     fn get_tab_name(&self, group_id: u64, id: u64) -> String {
+        let is_agent = self.tabs.get(&id).map(|t| t.is_agent).unwrap_or(false);
+        let prefix = if is_agent { "🤖 " } else { "" };
         if let Some(group) = self.groups.get(&group_id) {
-            for (i, tab_id) in group.tab_ids.iter().enumerate() {
-                if *tab_id == id {
-                    return format!("Tab{}", i + 1);
+            for (i, tab_info) in group.tabs.iter().enumerate() {
+                if tab_info.id == id {
+                    return format!("{}Tab{}", prefix, i + 1);
                 }
             }
         }
-        format!("Tab{}", id + 1)
+        format!("{}Tab{}", prefix, id + 1)
     }
 
     fn get_tab_mut(&mut self, id: u64) -> Option<&mut Tab> {
@@ -938,6 +986,10 @@ impl TabManager {
 
     fn set_default_shell_cmd(&mut self, shell_cmd: String) {
         self.default_shell_cmd = shell_cmd;
+    }
+
+    fn set_default_agent_cmd(&mut self, agent_cmd: String) {
+        self.default_agent_cmd = agent_cmd;
     }
 }
 
@@ -970,11 +1022,17 @@ fn default_agent_cmd() -> String {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+struct TabInfo {
+    id: u64,
+    is_agent: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 struct TabGroup {
     id: u64,
     name: String,
     path: PathBuf,
-    tab_ids: Vec<u64>,
+    tabs: Vec<TabInfo>,
 }
 
 impl TabGroup {
@@ -983,7 +1041,7 @@ impl TabGroup {
             id,
             name,
             path,
-            tab_ids: Vec::new(),
+            tabs: Vec::new(),
         }
     }
 
@@ -1001,6 +1059,7 @@ struct Tab {
     scroll_state: TabScrollState,
     was_alternate_last_frame: bool,
     just_created: bool,
+    is_agent: bool,
 }
 
 impl Tab {
@@ -1019,6 +1078,7 @@ impl Tab {
         id: u64,
         working_dir: Option<PathBuf>,
         shell_cmd: &str,
+        is_agent: bool,
     ) -> Self {
         let shell = if shell_cmd.is_empty() {
             #[cfg(unix)]
@@ -1048,6 +1108,7 @@ impl Tab {
             scroll_state: TabScrollState::default(),
             was_alternate_last_frame: false,
             just_created: true,
+            is_agent,
         }
     }
 
