@@ -1,7 +1,7 @@
 [Desktop Entry]
-Name=Multi Agent Terminal
-Comment=Multi-Agent Terminal - Yet Another AI Agent
-Exec=yaaa
+Name=YAAA
+Comment=Yet Another AI Agent
+Exec=bash --login -c /usr/bin/yaaa
 Icon=yaaa
 Type=Application
 Categories=TerminalEmulator;System;
