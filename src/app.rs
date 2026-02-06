@@ -728,11 +728,14 @@ impl TabManager {
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
         if let Some(groups_data) = manager.load_groups() {
-            for group in groups_data {
+            for mut group in groups_data {
                 manager.next_group_id = manager.next_group_id.max(group.id + 1);
-                for tab_info in &group.tabs {
+                for tab_info in &mut group.tabs {
                     manager.next_tab_id = manager.next_tab_id.max(tab_info.id + 1);
-                    let shell_cmd = if tab_info.is_agent {
+                    let use_agent =
+                        tab_info.is_agent && Tab::command_exists(&manager.default_agent_cmd);
+                    tab_info.is_agent = use_agent;
+                    let shell_cmd = if use_agent {
                         &manager.default_agent_cmd
                     } else {
                         &manager.default_shell_cmd
@@ -743,7 +746,7 @@ impl TabManager {
                         tab_info.id,
                         Some(group.path.clone()),
                         shell_cmd,
-                        tab_info.is_agent,
+                        use_agent,
                     );
                     manager.tabs.insert(tab_info.id, tab);
                 }
@@ -830,7 +833,8 @@ impl TabManager {
         self.next_tab_id += 1;
 
         let group_path = self.groups.get(&group_id).map(|g| g.path.clone());
-        let shell_cmd = if is_agent {
+        let use_agent = is_agent && Tab::command_exists(&self.default_agent_cmd);
+        let shell_cmd = if use_agent {
             &self.default_agent_cmd
         } else {
             &self.default_shell_cmd
@@ -841,14 +845,14 @@ impl TabManager {
             tab_id,
             group_path,
             shell_cmd,
-            is_agent,
+            use_agent,
         );
         self.tabs.insert(tab_id, tab);
 
         if let Some(group) = self.groups.get_mut(&group_id) {
             group.tabs.push(TabInfo {
                 id: tab_id,
-                is_agent,
+                is_agent: use_agent,
             });
         }
 
@@ -1094,6 +1098,58 @@ impl Tab {
 }
 
 impl Tab {
+    fn command_exists(cmd: &str) -> bool {
+        #[cfg(unix)]
+        {
+            use std::process::Command;
+            if let Ok(output) = Command::new("which").arg(cmd).output() {
+                output.status.success()
+            } else {
+                false
+            }
+        }
+        #[cfg(windows)]
+        {
+            use std::process::Command;
+            Command::new("where")
+                .arg(cmd)
+                .output()
+                .map_or(false, |output| output.status.success())
+        }
+    }
+
+    fn resolve_shell(shell_cmd: &str, is_agent: bool) -> String {
+        if shell_cmd.is_empty() {
+            #[cfg(unix)]
+            return std::env::var("SHELL").unwrap_or_else(|_| "/usr/bin/bash".to_string());
+            #[cfg(windows)]
+            return "cmd.exe".to_string();
+        }
+
+        let mut candidates = vec![shell_cmd.to_string()];
+
+        if is_agent {
+            candidates.push("/usr/bin/bash".to_string());
+            candidates.push("bash".to_string());
+        }
+
+        #[cfg(unix)]
+        candidates.push("/usr/bin/bash".to_string());
+        #[cfg(windows)]
+        candidates.push("cmd.exe".to_string());
+
+        for candidate in candidates {
+            if Self::command_exists(&candidate) {
+                return candidate;
+            }
+        }
+
+        #[cfg(unix)]
+        return "/usr/bin/bash".to_string();
+        #[cfg(windows)]
+        return "cmd.exe".to_string();
+    }
+
     fn new(
         ctx: egui::Context,
         command_sender: Sender<(u64, PtyEvent)>,
@@ -1102,27 +1158,22 @@ impl Tab {
         shell_cmd: &str,
         is_agent: bool,
     ) -> Self {
-        let shell = if shell_cmd.is_empty() {
-            #[cfg(unix)]
-            let shell = std::env::var("SHELL").expect("SHELL variable is not defined");
-            #[cfg(windows)]
-            let shell = "cmd.exe".to_string();
-            shell
-        } else {
-            shell_cmd.to_string()
-        };
+        let shell = Self::resolve_shell(shell_cmd, is_agent);
 
         let backend = TerminalBackend::new(
             id,
             ctx,
             command_sender,
             egui_term::BackendSettings {
-                shell,
+                shell: shell.clone(),
                 working_directory: working_dir,
                 ..Default::default()
             },
         )
-        .unwrap();
+        .expect(&format!(
+            "Failed to create terminal backend with shell: {}",
+            shell
+        ));
 
         Self {
             backend,
