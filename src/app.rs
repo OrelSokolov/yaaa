@@ -85,9 +85,11 @@ impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let (command_sender, command_receiver) = mpsc::channel();
         let command_sender_clone = command_sender.clone();
-        let tab_manager = TabManager::new(command_sender_clone, cc);
 
         let settings = Self::load_settings();
+
+        let tab_manager =
+            TabManager::new(command_sender_clone, cc, settings.default_shell_cmd.clone());
 
         let editing_default_shell_cmd = settings.default_shell_cmd.clone();
         let editing_default_agent_cmd = settings.default_agent_cmd.clone();
@@ -376,6 +378,8 @@ impl eframe::App for App {
         if settings_save {
             self.saved_default_shell_cmd = self.editing_default_shell_cmd.clone();
             self.saved_default_agent_cmd = self.editing_default_agent_cmd.clone();
+            self.tab_manager
+                .set_default_shell_cmd(self.editing_default_shell_cmd.clone());
             self.save_settings();
             self.show_settings = false;
         }
@@ -653,10 +657,15 @@ struct TabManager {
     active_tab_id: Option<u64>,
     next_group_id: u64,
     next_tab_id: u64,
+    default_shell_cmd: String,
 }
 
 impl TabManager {
-    fn new(command_sender: Sender<(u64, PtyEvent)>, cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(
+        command_sender: Sender<(u64, PtyEvent)>,
+        cc: &eframe::CreationContext<'_>,
+        default_shell_cmd: String,
+    ) -> Self {
         let mut manager = Self {
             command_sender,
             groups: BTreeMap::new(),
@@ -665,6 +674,7 @@ impl TabManager {
             active_tab_id: None,
             next_group_id: 0,
             next_tab_id: 0,
+            default_shell_cmd,
         };
 
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -679,6 +689,7 @@ impl TabManager {
                         manager.command_sender.clone(),
                         tab_id,
                         Some(group.path.clone()),
+                        &manager.default_shell_cmd,
                     );
                     manager.tabs.insert(tab_id, tab);
                 }
@@ -765,7 +776,13 @@ impl TabManager {
         self.next_tab_id += 1;
 
         let group_path = self.groups.get(&group_id).map(|g| g.path.clone());
-        let tab = Tab::new(ctx, self.command_sender.clone(), tab_id, group_path);
+        let tab = Tab::new(
+            ctx,
+            self.command_sender.clone(),
+            tab_id,
+            group_path,
+            &self.default_shell_cmd,
+        );
         self.tabs.insert(tab_id, tab);
 
         if let Some(group) = self.groups.get_mut(&group_id) {
@@ -918,6 +935,10 @@ impl TabManager {
 
         self.tabs.get_mut(&tab_id)
     }
+
+    fn set_default_shell_cmd(&mut self, shell_cmd: String) {
+        self.default_shell_cmd = shell_cmd;
+    }
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -997,18 +1018,24 @@ impl Tab {
         command_sender: Sender<(u64, PtyEvent)>,
         id: u64,
         working_dir: Option<PathBuf>,
+        shell_cmd: &str,
     ) -> Self {
-        #[cfg(unix)]
-        let system_shell = std::env::var("SHELL").expect("SHELL variable is not defined");
-        #[cfg(windows)]
-        let system_shell = "cmd.exe".to_string();
+        let shell = if shell_cmd.is_empty() {
+            #[cfg(unix)]
+            let shell = std::env::var("SHELL").expect("SHELL variable is not defined");
+            #[cfg(windows)]
+            let shell = "cmd.exe".to_string();
+            shell
+        } else {
+            shell_cmd.to_string()
+        };
 
         let backend = TerminalBackend::new(
             id,
             ctx,
             command_sender,
             egui_term::BackendSettings {
-                shell: system_shell,
+                shell,
                 working_directory: working_dir,
                 ..Default::default()
             },
