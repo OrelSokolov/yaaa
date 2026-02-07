@@ -121,23 +121,47 @@ impl Tab {
         working_dir: Option<PathBuf>,
         shell_cmd: &str,
         is_agent: bool,
+        run_as_login_shell: bool,
     ) -> Self {
-        let shell = Self::resolve_shell(shell_cmd, is_agent);
+        let mut shell = Self::resolve_shell(shell_cmd, is_agent);
 
-        let backend = TerminalBackend::new(
-            id,
-            ctx,
-            command_sender,
-            egui_term::BackendSettings {
-                shell: shell.clone(),
-                working_directory: working_dir,
-                ..Default::default()
-            },
-        )
-        .expect(&format!(
-            "Failed to create terminal backend with shell: {}",
-            shell
-        ));
+        let args = if run_as_login_shell {
+            vec!["--login".to_string()]
+        } else {
+            vec![]
+        };
+
+        let backend = loop {
+            let result = TerminalBackend::new(
+                id,
+                ctx.clone(),
+                command_sender.clone(),
+                egui_term::BackendSettings {
+                    shell: shell.clone(),
+                    args: args.clone(),
+                    working_directory: working_dir.clone(),
+                    ..Default::default()
+                },
+            );
+
+            match result {
+                Ok(backend) => break backend,
+                Err(e) => {
+                    eprintln!(
+                        "Failed to create terminal backend with shell '{}': {}",
+                        shell, e
+                    );
+
+                    let fallback = "/usr/bin/bash";
+                    if shell == fallback {
+                        panic!("Fallback shell '{}' also failed: {}", fallback, e);
+                    }
+
+                    shell = fallback.to_string();
+                    eprintln!("Retrying with fallback shell: {}", shell);
+                }
+            }
+        };
 
         Self {
             backend,

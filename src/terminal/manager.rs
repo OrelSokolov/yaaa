@@ -46,6 +46,7 @@ pub struct TabManager {
     next_tab_id: u64,
     pub default_shell_cmd: String,
     pub default_agent_cmd: String,
+    pub run_as_login_shell: bool,
 }
 
 impl TabManager {
@@ -54,6 +55,7 @@ impl TabManager {
         cc: &eframe::CreationContext<'_>,
         default_shell_cmd: String,
         default_agent_cmd: String,
+        run_as_login_shell: bool,
     ) -> Self {
         let mut manager = Self {
             command_sender,
@@ -65,6 +67,7 @@ impl TabManager {
             next_tab_id: 0,
             default_shell_cmd,
             default_agent_cmd,
+            run_as_login_shell,
         };
 
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -89,6 +92,7 @@ impl TabManager {
                         Some(group.path.clone()),
                         shell_cmd,
                         use_agent,
+                        manager.run_as_login_shell,
                     );
                     manager.tabs.insert(tab_info.id, tab);
                 }
@@ -188,6 +192,7 @@ impl TabManager {
             group_path,
             shell_cmd,
             use_agent,
+            self.run_as_login_shell,
         );
         self.tabs.insert(tab_id, tab);
 
@@ -358,5 +363,9 @@ impl TabManager {
 
     pub fn set_default_agent_cmd(&mut self, agent_cmd: String) {
         self.default_agent_cmd = agent_cmd;
+    }
+
+    pub fn set_run_as_login_shell(&mut self, run_as_login_shell: bool) {
+        self.run_as_login_shell = run_as_login_shell;
     }
 }

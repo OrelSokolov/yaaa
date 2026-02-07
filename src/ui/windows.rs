@@ -11,14 +11,23 @@ pub struct WindowManager {
     pub editing_default_agent_cmd: String,
     pub saved_default_shell_cmd: String,
     pub saved_default_agent_cmd: String,
+    pub editing_run_as_login_shell: bool,
+    pub saved_run_as_login_shell: bool,
+    pub was_settings_open: bool,
 }
 
 impl WindowManager {
-    pub fn new(default_shell_cmd: String, default_agent_cmd: String) -> Self {
+    pub fn new(
+        default_shell_cmd: String,
+        default_agent_cmd: String,
+        run_as_login_shell: bool,
+    ) -> Self {
         let editing_default_shell_cmd = default_shell_cmd.clone();
         let editing_default_agent_cmd = default_agent_cmd.clone();
         let saved_default_shell_cmd = editing_default_shell_cmd.clone();
         let saved_default_agent_cmd = editing_default_agent_cmd.clone();
+        let editing_run_as_login_shell = run_as_login_shell;
+        let saved_run_as_login_shell = run_as_login_shell;
 
         Self {
             show_about: false,
@@ -31,6 +40,9 @@ impl WindowManager {
             editing_default_agent_cmd,
             saved_default_shell_cmd,
             saved_default_agent_cmd,
+            editing_run_as_login_shell,
+            saved_run_as_login_shell,
+            was_settings_open: false,
         }
     }
 
@@ -125,7 +137,15 @@ impl WindowManager {
         let mut settings_save = false;
         let mut settings_cancel = false;
 
+        let window_id = egui::Id::new("settings_window");
+
+        if self.show_settings && !self.was_settings_open {
+            ctx.memory_mut(|m| m.request_focus(window_id));
+        }
+        self.was_settings_open = self.show_settings;
+
         egui::Window::new("Settings")
+            .id(window_id)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_settings)
             .show(ctx, |ui| {
@@ -139,6 +159,10 @@ impl WindowManager {
 
                 ui.label("Default agent cmd:");
                 ui.text_edit_singleline(&mut self.editing_default_agent_cmd);
+
+                ui.add_space(15.0);
+
+                ui.checkbox(&mut self.editing_run_as_login_shell, "Run as login shell");
 
                 ui.add_space(15.0);
 
@@ -160,14 +184,17 @@ impl WindowManager {
         if settings_save {
             actions.default_shell_cmd = Some(self.editing_default_shell_cmd.clone());
             actions.default_agent_cmd = Some(self.editing_default_agent_cmd.clone());
+            actions.run_as_login_shell = Some(self.editing_run_as_login_shell);
             self.saved_default_shell_cmd = self.editing_default_shell_cmd.clone();
             self.saved_default_agent_cmd = self.editing_default_agent_cmd.clone();
+            self.saved_run_as_login_shell = self.editing_run_as_login_shell;
             actions.should_save_settings = true;
             self.show_settings = false;
         }
         if settings_cancel {
             self.editing_default_shell_cmd = self.saved_default_shell_cmd.clone();
             self.editing_default_agent_cmd = self.saved_default_agent_cmd.clone();
+            self.editing_run_as_login_shell = self.saved_run_as_login_shell;
             self.show_settings = false;
         }
     }
@@ -184,6 +211,7 @@ pub struct WindowActions {
     pub rename_group: Option<(u64, String)>,
     pub default_shell_cmd: Option<String>,
     pub default_agent_cmd: Option<String>,
+    pub run_as_login_shell: Option<bool>,
     pub should_save_groups: bool,
     pub should_save_settings: bool,
 }

@@ -9,6 +9,8 @@ pub struct Settings {
     pub show_terminal_lines: bool,
     #[serde(default = "default_show_fps")]
     pub show_fps: bool,
+    #[serde(default = "default_run_as_login_shell")]
+    pub run_as_login_shell: bool,
     #[serde(default = "default_shell_cmd")]
     pub default_shell_cmd: String,
     #[serde(default = "default_agent_cmd")]
@@ -21,6 +23,10 @@ fn default_show_terminal_lines() -> bool {
 
 fn default_show_fps() -> bool {
     DEFAULT_SHOW_FPS
+}
+
+fn default_run_as_login_shell() -> bool {
+    DEFAULT_RUN_AS_LOGIN_SHELL
 }
 
 fn default_shell_cmd() -> String {

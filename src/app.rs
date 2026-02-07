@@ -29,11 +29,13 @@ impl App {
             cc,
             settings.default_shell_cmd.clone(),
             settings.default_agent_cmd.clone(),
+            settings.run_as_login_shell,
         );
 
         let window_manager = WindowManager::new(
             settings.default_shell_cmd.clone(),
             settings.default_agent_cmd.clone(),
+            settings.run_as_login_shell,
         );
 
         let recent_projects = RecentProjects::load();
@@ -53,6 +55,7 @@ impl App {
         let settings = Settings {
             show_terminal_lines: self.show_terminal_lines,
             show_fps: self.show_fps,
+            run_as_login_shell: self.window_manager.editing_run_as_login_shell,
             default_shell_cmd: self.window_manager.editing_default_shell_cmd.clone(),
             default_agent_cmd: self.window_manager.editing_default_agent_cmd.clone(),
         };
@@ -192,6 +195,10 @@ impl App {
 
         if let Some(agent_cmd) = actions.default_agent_cmd {
             self.tab_manager.set_default_agent_cmd(agent_cmd);
+        }
+
+        if let Some(run_as_login_shell) = actions.run_as_login_shell {
+            self.tab_manager.set_run_as_login_shell(run_as_login_shell);
         }
 
         if actions.should_save_settings {
