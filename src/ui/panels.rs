@@ -44,11 +44,15 @@ pub fn show_left_panel(
                         .text_styles
                         .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
                     ui.add_space(8.0);
-                    let add_project_btn = ui
-                        .button("➕ Add project")
-                        .on_hover_cursor(egui::CursorIcon::PointingHand);
-                    if add_project_btn.clicked() {
-                        actions.add_group_clicked = true;
+                    if groups_to_render.is_empty() {
+                        let add_project_btn = ui
+                            .button("➕ Add project")
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        if add_project_btn.clicked() {
+                            actions.add_group_clicked = true;
+                        }
+                    } else {
+                        ui.label("My projects");
                     }
                     ui.add_space(8.0);
 
