@@ -221,7 +221,7 @@ impl eframe::App for App {
                                 apply_menu_style(ui);
 
                                 if ui.button("ℹ About").clicked() {
-                                    self.show_about = true;
+                                    self.window_manager.show_about = true;
                                     ui.close();
                                 }
                             });
