@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.3] - 2026-02-07
+
+### Added
+- Login shell implementation
+
+### Fixed
+- Focus handling improvements
+
 ## [0.3.2] - 2026-02-07
 
 ### Added
