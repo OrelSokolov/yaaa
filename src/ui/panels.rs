@@ -43,12 +43,14 @@ pub fn show_left_panel(
                     ui.style_mut()
                         .text_styles
                         .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+                    ui.add_space(8.0);
                     let add_project_btn = ui
                         .button("➕ Add project")
                         .on_hover_cursor(egui::CursorIcon::PointingHand);
                     if add_project_btn.clicked() {
                         actions.add_group_clicked = true;
                     }
+                    ui.add_space(8.0);
 
                     ui.separator();
 
