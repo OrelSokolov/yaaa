@@ -381,6 +381,6 @@ impl eframe::App for App {
             self.tab_manager.save_groups();
         }
 
-        show_central_panel(ctx, &mut self.tab_manager);
+        show_central_panel(ctx, &mut self.tab_manager, &self.window_manager);
     }
 }

@@ -164,7 +164,11 @@ pub fn show_left_panel(
     actions
 }
 
-pub fn show_central_panel(ctx: &egui::Context, tab_manager: &mut TabManager) {
+pub fn show_central_panel(
+    ctx: &egui::Context,
+    tab_manager: &mut TabManager,
+    window_manager: &super::windows::WindowManager,
+) {
     egui::CentralPanel::default().show(ctx, |ui| {
         if let Some(tab) = tab_manager.get_active() {
             let content = tab.backend.last_content();
@@ -204,7 +208,11 @@ pub fn show_central_panel(ctx: &egui::Context, tab_manager: &mut TabManager) {
 
                     let should_block_input = tab.just_created;
                     let terminal = egui_term::TerminalView::new(ui, &mut tab.backend)
-                        .set_focus(!should_block_input)
+                        .set_focus(
+                            !window_manager.show_rename_group
+                                && !window_manager.show_settings
+                                && !should_block_input,
+                        )
                         .set_size(ui.available_size());
 
                     ui.add(terminal);
