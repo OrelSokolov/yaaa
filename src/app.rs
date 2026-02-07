@@ -1,4 +1,4 @@
-use crate::config::Settings;
+use crate::config::{RecentProjects, Settings};
 use crate::hotkeys::handle_keyboard_events;
 use crate::menu::apply_menu_style;
 use crate::terminal::TabManager;
@@ -12,6 +12,7 @@ pub struct App {
     command_receiver: Receiver<(u64, egui_term::PtyEvent)>,
     tab_manager: TabManager,
     window_manager: WindowManager,
+    recent_projects: RecentProjects,
     pub show_terminal_lines: bool,
     pub show_fps: bool,
 }
@@ -35,11 +36,14 @@ impl App {
             settings.default_agent_cmd.clone(),
         );
 
+        let recent_projects = RecentProjects::load();
+
         Self {
             _command_sender: command_sender,
             command_receiver,
             tab_manager,
             window_manager,
+            recent_projects,
             show_terminal_lines: settings.show_terminal_lines,
             show_fps: settings.show_fps,
         }
@@ -53,6 +57,10 @@ impl App {
             default_agent_cmd: self.window_manager.editing_default_agent_cmd.clone(),
         };
         settings.save();
+    }
+
+    fn save_recent_projects(&self) {
+        self.recent_projects.save();
     }
 
     fn handle_command_events(&mut self) {
@@ -116,6 +124,9 @@ impl App {
     fn handle_panel_actions(&mut self, actions: super::ui::panels::PanelActions) {
         if actions.add_group_clicked {
             if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                let name = crate::terminal::manager::TabGroup::name_from_path(&path);
+                self.recent_projects.add_project(name.clone(), path.clone());
+                self.save_recent_projects();
                 self.tab_manager.add_group_with_path(
                     self.tab_manager
                         .active_tab_id
@@ -142,6 +153,11 @@ impl App {
         for (group_id, action_type, data) in actions.group_actions {
             match action_type.as_str() {
                 "remove_group" => {
+                    if let Some(group) = self.tab_manager.groups.get(&group_id) {
+                        self.recent_projects
+                            .add_project(group.name.clone(), group.path.clone());
+                        self.save_recent_projects();
+                    }
                     self.tab_manager.remove_group(group_id);
                     self.tab_manager.save_groups();
                 }
@@ -223,6 +239,56 @@ impl eframe::App for App {
                                 if ui.button("ℹ About").clicked() {
                                     self.window_manager.show_about = true;
                                     ui.close();
+                                }
+                            });
+                            ui.menu_button("Projects", |ui| {
+                                apply_menu_style(ui);
+
+                                if ui.button("➕ Add project").clicked() {
+                                    if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                                        let name =
+                                            crate::terminal::manager::TabGroup::name_from_path(
+                                                &path,
+                                            );
+                                        self.recent_projects
+                                            .add_project(name.clone(), path.clone());
+                                        self.save_recent_projects();
+                                        self.tab_manager
+                                            .add_group_with_path(ctx.clone(), Some(path));
+                                        self.tab_manager.save_groups();
+                                    }
+                                    ui.close();
+                                }
+
+                                ui.separator();
+
+                                let opened_paths: std::collections::HashSet<_> = self
+                                    .tab_manager
+                                    .groups
+                                    .values()
+                                    .map(|g| g.path.clone())
+                                    .collect();
+
+                                let recent_projects: Vec<_> = self
+                                    .recent_projects
+                                    .projects
+                                    .iter()
+                                    .filter(|p| !opened_paths.contains(&p.path))
+                                    .collect();
+
+                                if !recent_projects.is_empty() {
+                                    for project in recent_projects {
+                                        if ui.button(&project.name).clicked() {
+                                            self.tab_manager.add_group_with_path(
+                                                ctx.clone(),
+                                                Some(project.path.clone()),
+                                            );
+                                            self.tab_manager.save_groups();
+                                            ui.close();
+                                        }
+                                    }
+                                } else {
+                                    ui.label("No recent projects");
                                 }
                             });
                             ui.menu_button("Settings", |ui| {
