@@ -62,13 +62,15 @@ impl WindowManager {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_about)
             .show(ctx, |ui| {
-                ui.heading("Yet Another AI Agent");
-                ui.label(format!("Version: {}", env!("CARGO_PKG_VERSION")));
-                ui.add_space(10.0);
-                ui.label("Multi-agent terminal with tabs and project management");
-                ui.label("Manage multiple agent sessions across different projects");
-                ui.add_space(10.0);
-                ui.label("Author: Oleg Orlov (orelcokolov@gmail.com)");
+                egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
+                    ui.heading("Yet Another AI Agent");
+                    ui.label(format!("Version: {}", env!("CARGO_PKG_VERSION")));
+                    ui.add_space(10.0);
+                    ui.label("Multi-agent terminal with tabs and project management");
+                    ui.label("Manage multiple agent sessions across different projects");
+                    ui.add_space(10.0);
+                    ui.label("Author: Oleg Orlov (orelcokolov@gmail.com)");
+                });
             });
     }
 
@@ -77,20 +79,22 @@ impl WindowManager {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_hotkeys)
             .show(ctx, |ui| {
-                ui.heading("Keyboard Shortcuts");
-                ui.add_space(10.0);
+                egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
+                    ui.heading("Keyboard Shortcuts");
+                    ui.add_space(10.0);
 
-                egui::Grid::new("hotkeys_grid")
-                    .num_columns(2)
-                    .spacing([40.0, 8.0])
-                    .show(ui, |ui| {
-                        let hotkeys = get_hotkeys();
-                        for (key, description) in hotkeys {
-                            ui.label(egui::RichText::new(key).strong());
-                            ui.label(description);
-                            ui.end_row();
-                        }
-                    });
+                    egui::Grid::new("hotkeys_grid")
+                        .num_columns(2)
+                        .spacing([40.0, 8.0])
+                        .show(ui, |ui| {
+                            let hotkeys = get_hotkeys();
+                            for (key, description) in hotkeys {
+                                ui.label(egui::RichText::new(key).strong());
+                                ui.label(description);
+                                ui.end_row();
+                            }
+                        });
+                });
             });
     }
 
@@ -102,19 +106,22 @@ impl WindowManager {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_rename_group)
             .show(ctx, |ui| {
-                ui.heading("Rename Group");
-                ui.text_edit_singleline(&mut self.rename_group_name);
-                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                    should_close = true;
-                }
-                ui.horizontal(|ui| {
-                    if ui.button("Save").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter))
-                    {
-                        should_save = true;
-                    }
-                    if ui.button("Cancel").clicked() {
+                egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
+                    ui.heading("Rename Group");
+                    ui.text_edit_singleline(&mut self.rename_group_name);
+                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                         should_close = true;
                     }
+                    ui.horizontal(|ui| {
+                        if ui.button("Save").clicked()
+                            || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                        {
+                            should_save = true;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            should_close = true;
+                        }
+                    });
                 });
             });
 
@@ -149,35 +156,38 @@ impl WindowManager {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_settings)
             .show(ctx, |ui| {
-                ui.heading("General Settings");
-                ui.add_space(10.0);
+                egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
+                    ui.heading("General Settings");
+                    ui.add_space(10.0);
 
-                ui.label("Default shell cmd:");
-                ui.text_edit_singleline(&mut self.editing_default_shell_cmd);
+                    ui.label("Default shell cmd:");
+                    ui.text_edit_singleline(&mut self.editing_default_shell_cmd);
 
-                ui.add_space(5.0);
+                    ui.add_space(5.0);
 
-                ui.label("Default agent cmd:");
-                ui.text_edit_singleline(&mut self.editing_default_agent_cmd);
+                    ui.label("Default agent cmd:");
+                    ui.text_edit_singleline(&mut self.editing_default_agent_cmd);
 
-                ui.add_space(15.0);
+                    ui.add_space(15.0);
 
-                ui.checkbox(&mut self.editing_run_as_login_shell, "Run as login shell");
+                    ui.checkbox(&mut self.editing_run_as_login_shell, "Run as login shell");
 
-                ui.add_space(15.0);
+                    ui.add_space(15.0);
 
-                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                    settings_cancel = true;
-                }
-
-                ui.horizontal(|ui| {
-                    if ui.button("Save").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter))
-                    {
-                        settings_save = true;
-                    }
-                    if ui.button("Cancel").clicked() {
+                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                         settings_cancel = true;
                     }
+
+                    ui.horizontal(|ui| {
+                        if ui.button("Save").clicked()
+                            || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                        {
+                            settings_save = true;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            settings_cancel = true;
+                        }
+                    });
                 });
             });
 
