@@ -92,7 +92,7 @@ impl TabManager {
                         Some(group.path.clone()),
                         shell_cmd,
                         use_agent,
-                        manager.run_as_login_shell,
+                        !use_agent && manager.run_as_login_shell,
                     );
                     manager.tabs.insert(tab_info.id, tab);
                 }
@@ -192,7 +192,7 @@ impl TabManager {
             group_path,
             shell_cmd,
             use_agent,
-            self.run_as_login_shell,
+            !use_agent && self.run_as_login_shell,
         );
         self.tabs.insert(tab_id, tab);
 
