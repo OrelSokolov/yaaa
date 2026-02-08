@@ -8,8 +8,8 @@ pub fn get_hotkeys() -> BTreeMap<&'static str, &'static str> {
     hotkeys.insert("Ctrl + Shift + N", "Add new terminal tab");
     hotkeys.insert("Ctrl + Shift + A", "Add new agent tab");
     hotkeys.insert("Ctrl + Shift + Q", "Close current tab");
-    hotkeys.insert("Page Up", "Scroll terminal one page up");
-    hotkeys.insert("Page Down", "Scroll terminal one page down");
+    hotkeys.insert("Ctrl + Shift + Page Up", "Scroll terminal one page up");
+    hotkeys.insert("Ctrl + Shift + Page Down", "Scroll terminal one page down");
     hotkeys.insert("Ctrl + Shift + Home", "Scroll terminal to top");
     hotkeys.insert("Ctrl + Shift + End", "Scroll terminal to bottom");
     hotkeys
@@ -92,12 +92,20 @@ pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> Keybo
         events.scroll_to_bottom = true;
     }
 
-    if active_group_exists && input.key_pressed(egui::Key::PageUp) {
+    if active_group_exists
+        && input.key_pressed(egui::Key::PageUp)
+        && input.modifiers.ctrl
+        && input.modifiers.shift
+    {
         ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::PageUp));
         events.scroll_page_up = true;
     }
 
-    if active_group_exists && input.key_pressed(egui::Key::PageDown) {
+    if active_group_exists
+        && input.key_pressed(egui::Key::PageDown)
+        && input.modifiers.ctrl
+        && input.modifiers.shift
+    {
         ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::PageDown));
         events.scroll_page_down = true;
     }
