@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/logo.png" alt="Logo" width="100" />
+  <img src="./assets/logo-readme.png" alt="Logo" width="200" />
 </p>
 
 # Yet Another AI Agent
