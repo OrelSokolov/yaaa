@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.7] - 2026-02-09
+
+### Added
+- Page Up/Down keyboard shortcuts for terminal page scrolling
+
 ## [0.3.3] - 2026-02-07
 
 ### Added

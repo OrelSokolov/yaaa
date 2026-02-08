@@ -1213,7 +1213,7 @@ dependencies = [
 [[package]]
 name = "egui_term"
 version = "0.1.0"
-source = "git+https://github.com/OrelSokolov/egui_term.git?rev=a2468e5913583aab1303be375dbe442bbbfa0240#a2468e5913583aab1303be375dbe442bbbfa0240"
+source = "git+https://github.com/OrelSokolov/egui_term.git?rev=241c7658e1838e2721f8a7cdc2aeca7e70debe19#241c7658e1838e2721f8a7cdc2aeca7e70debe19"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
@@ -4920,7 +4920,7 @@ dependencies = [
 
 [[package]]
 name = "yaaa"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "alacritty_terminal",
  "cargo-deb",

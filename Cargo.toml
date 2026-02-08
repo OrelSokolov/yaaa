@@ -1,6 +1,6 @@
 [package]
 name = "yaaa"
-version = "0.3.6"
+ version = "0.3.7"
 edition = "2021"
  description = "Yet Another AI Agent"
 
@@ -13,7 +13,7 @@ eframe = { version = "0.33", default-features = false, features = [
     "persistence",
 ] }
 log = "0.4"
- egui_term = { git = "https://github.com/OrelSokolov/egui_term.git", rev = "a2468e5913583aab1303be375dbe442bbbfa0240" }
+ egui_term = { git = "https://github.com/OrelSokolov/egui_term.git", rev = "241c7658e1838e2721f8a7cdc2aeca7e70debe19" }
  wgpu = "27"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

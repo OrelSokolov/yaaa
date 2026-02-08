@@ -8,6 +8,8 @@ pub fn get_hotkeys() -> BTreeMap<&'static str, &'static str> {
     hotkeys.insert("Ctrl + Shift + N", "Add new terminal tab");
     hotkeys.insert("Ctrl + Shift + A", "Add new agent tab");
     hotkeys.insert("Ctrl + Shift + Q", "Close current tab");
+    hotkeys.insert("Page Up", "Scroll terminal one page up");
+    hotkeys.insert("Page Down", "Scroll terminal one page down");
     hotkeys.insert("Ctrl + Shift + Home", "Scroll terminal to top");
     hotkeys.insert("Ctrl + Shift + End", "Scroll terminal to bottom");
     hotkeys
@@ -21,6 +23,8 @@ pub struct KeyboardEvents {
     pub close_tab: bool,
     pub scroll_to_top: bool,
     pub scroll_to_bottom: bool,
+    pub scroll_page_up: bool,
+    pub scroll_page_down: bool,
 }
 
 pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> KeyboardEvents {
@@ -34,6 +38,8 @@ pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> Keybo
         close_tab: false,
         scroll_to_top: false,
         scroll_to_bottom: false,
+        scroll_page_up: false,
+        scroll_page_down: false,
     };
 
     if input.key_pressed(egui::Key::Tab) && input.modifiers.ctrl {
@@ -84,6 +90,16 @@ pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> Keybo
     {
         ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::End));
         events.scroll_to_bottom = true;
+    }
+
+    if active_group_exists && input.key_pressed(egui::Key::PageUp) {
+        ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::PageUp));
+        events.scroll_page_up = true;
+    }
+
+    if active_group_exists && input.key_pressed(egui::Key::PageDown) {
+        ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::PageDown));
+        events.scroll_page_down = true;
     }
 
     events

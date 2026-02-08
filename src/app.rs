@@ -5,6 +5,7 @@ use crate::terminal::TabManager;
 use crate::ui::{
     show_central_panel, show_debug_panel, show_left_panel, WindowActions, WindowManager,
 };
+use egui_term::BackendCommand;
 use std::sync::mpsc::{self, Receiver, Sender};
 
 pub struct App {
@@ -125,6 +126,18 @@ impl App {
         if events.scroll_to_bottom {
             if let Some(tab) = self.tab_manager.get_active() {
                 tab.backend.scroll_to_bottom();
+            }
+        }
+
+        if events.scroll_page_up {
+            if let Some(tab) = self.tab_manager.get_active() {
+                tab.backend.process_command(BackendCommand::ScrollPageUp);
+            }
+        }
+
+        if events.scroll_page_down {
+            if let Some(tab) = self.tab_manager.get_active() {
+                tab.backend.process_command(BackendCommand::ScrollPageDown);
             }
         }
 
