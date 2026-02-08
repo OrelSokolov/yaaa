@@ -116,6 +116,18 @@ impl App {
             }
         }
 
+        if events.scroll_to_top {
+            if let Some(tab) = self.tab_manager.get_active() {
+                tab.backend.scroll_to_top();
+            }
+        }
+
+        if events.scroll_to_bottom {
+            if let Some(tab) = self.tab_manager.get_active() {
+                tab.backend.scroll_to_bottom();
+            }
+        }
+
         (
             events.close_tab,
             close_tab_id,

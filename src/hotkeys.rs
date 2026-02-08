@@ -8,6 +8,8 @@ pub fn get_hotkeys() -> BTreeMap<&'static str, &'static str> {
     hotkeys.insert("Ctrl + Shift + N", "Add new terminal tab");
     hotkeys.insert("Ctrl + Shift + A", "Add new agent tab");
     hotkeys.insert("Ctrl + Shift + Q", "Close current tab");
+    hotkeys.insert("Ctrl + Shift + Home", "Scroll terminal to top");
+    hotkeys.insert("Ctrl + Shift + End", "Scroll terminal to bottom");
     hotkeys
 }
 
@@ -17,6 +19,8 @@ pub struct KeyboardEvents {
     pub add_terminal_tab: bool,
     pub add_agent_tab: bool,
     pub close_tab: bool,
+    pub scroll_to_top: bool,
+    pub scroll_to_bottom: bool,
 }
 
 pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> KeyboardEvents {
@@ -28,9 +32,12 @@ pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> Keybo
         add_terminal_tab: false,
         add_agent_tab: false,
         close_tab: false,
+        scroll_to_top: false,
+        scroll_to_bottom: false,
     };
 
     if input.key_pressed(egui::Key::Tab) && input.modifiers.ctrl {
+        ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::Tab));
         if input.modifiers.shift {
             events.switch_to_prev_tab = true;
         } else {
@@ -43,6 +50,7 @@ pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> Keybo
         && input.modifiers.ctrl
         && input.modifiers.shift
     {
+        ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::N));
         events.add_terminal_tab = true;
     }
 
@@ -51,11 +59,31 @@ pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> Keybo
         && input.modifiers.ctrl
         && input.modifiers.shift
     {
+        ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::A));
         events.add_agent_tab = true;
     }
 
     if input.key_pressed(egui::Key::Q) && input.modifiers.ctrl && input.modifiers.shift {
+        ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::Q));
         events.close_tab = true;
+    }
+
+    if active_group_exists
+        && input.key_pressed(egui::Key::Home)
+        && input.modifiers.ctrl
+        && input.modifiers.shift
+    {
+        ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::Home));
+        events.scroll_to_top = true;
+    }
+
+    if active_group_exists
+        && input.key_pressed(egui::Key::End)
+        && input.modifiers.ctrl
+        && input.modifiers.shift
+    {
+        ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::End));
+        events.scroll_to_bottom = true;
     }
 
     events
