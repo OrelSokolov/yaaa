@@ -1,8 +1,8 @@
 [package]
 name = "yaaa"
- version = "0.3.7"
+version = "0.3.7"
 edition = "2021"
- description = "Yet Another AI Agent"
+description = "Yet Another AI Agent"
 
 [dependencies]
 egui = "0.33"
