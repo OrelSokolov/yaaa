@@ -4,6 +4,7 @@ pub const RECENT_PROJECTS_FILE: &str = "recent_projects.json";
 
 pub const DEFAULT_SHOW_TERMINAL_LINES: bool = true;
 pub const DEFAULT_SHOW_FPS: bool = true;
+pub const DEFAULT_SHOW_SIDEBAR: bool = true;
 pub const DEFAULT_RUN_AS_LOGIN_SHELL: bool = false;
 pub const DEFAULT_SHELL_CMD: &str = "/usr/bin/bash";
 pub const DEFAULT_AGENT_CMD: &str = "opencode";

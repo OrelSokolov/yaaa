@@ -16,6 +16,7 @@ pub struct App {
     recent_projects: RecentProjects,
     pub show_terminal_lines: bool,
     pub show_fps: bool,
+    pub show_sidebar: bool,
 }
 
 impl App {
@@ -49,6 +50,7 @@ impl App {
             recent_projects,
             show_terminal_lines: settings.show_terminal_lines,
             show_fps: settings.show_fps,
+            show_sidebar: settings.show_sidebar,
         }
     }
 
@@ -56,6 +58,7 @@ impl App {
         let settings = Settings {
             show_terminal_lines: self.show_terminal_lines,
             show_fps: self.show_fps,
+            show_sidebar: self.show_sidebar,
             run_as_login_shell: self.window_manager.editing_run_as_login_shell,
             default_shell_cmd: self.window_manager.editing_default_shell_cmd.clone(),
             default_agent_cmd: self.window_manager.editing_default_agent_cmd.clone(),
@@ -370,6 +373,25 @@ impl eframe::App for App {
                                     ui.close();
                                 }
                             });
+
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let btn_text = if self.show_sidebar {
+                                        "📂 Hide Sidebar"
+                                    } else {
+                                        "📂 Show Sidebar"
+                                    };
+                                    if ui
+                                        .button(btn_text)
+                                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                                        .clicked()
+                                    {
+                                        self.show_sidebar = !self.show_sidebar;
+                                        self.save_settings();
+                                    }
+                                },
+                            );
                         });
                     });
                     ui.add_space(4.0);
@@ -378,7 +400,12 @@ impl eframe::App for App {
 
         let window_actions = self.window_manager.show(ctx);
 
-        let panel_actions = show_left_panel(ctx, &self.tab_manager, &mut self.window_manager);
+        let panel_actions = show_left_panel(
+            ctx,
+            &self.tab_manager,
+            &mut self.window_manager,
+            self.show_sidebar,
+        );
 
         show_debug_panel(
             ctx,

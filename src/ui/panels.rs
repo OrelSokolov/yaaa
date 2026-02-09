@@ -22,6 +22,7 @@ pub fn show_left_panel(
     ctx: &egui::Context,
     tab_manager: &TabManager,
     window_manager: &mut super::windows::WindowManager,
+    show_sidebar: bool,
 ) -> PanelActions {
     let mut actions = PanelActions::default();
 
@@ -33,133 +34,138 @@ pub fn show_left_panel(
         .map(|(id, g)| (*id, g.name.clone(), g.tabs.clone()))
         .collect();
 
-    egui::SidePanel::left("left_panel")
-        .default_width(100.0)
-        .show(ctx, |ui| {
-            egui::ScrollArea::vertical()
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    ui.style_mut().spacing.interact_size = egui::vec2(120.0, 24.0);
-                    ui.style_mut()
-                        .text_styles
-                        .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
-                    ui.add_space(8.0);
-                    if groups_to_render.is_empty() {
-                        let add_project_btn = ui
-                            .button("➕ Add project")
-                            .on_hover_cursor(egui::CursorIcon::PointingHand);
-                        if add_project_btn.clicked() {
-                            actions.add_group_clicked = true;
-                        }
-                    } else {
-                        ui.label("My projects");
-                    }
-                    ui.add_space(8.0);
-
-                    ui.separator();
-
-                    for (group_id, group_name, tabs) in &groups_to_render {
-                        let is_selected = active_group_id == Some(*group_id);
-
-                        ui.horizontal(|ui| {
-                            ui.centered_and_justified(|ui| {
-                                let sense = egui::Sense::click_and_drag();
-                                let response =
-                                    ui.allocate_rect(ui.available_rect_before_wrap(), sense);
-
-                                let text_color = if response.hovered() {
-                                    ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
-                                    egui::Color32::LIGHT_BLUE
-                                } else if is_selected {
-                                    ui.visuals().selection.stroke.color
-                                } else {
-                                    ui.visuals().text_color()
-                                };
-
-                                ui.painter().text(
-                                    response.rect.center(),
-                                    egui::Align2::CENTER_CENTER,
-                                    group_name,
-                                    egui::FontId::proportional(18.0),
-                                    text_color,
-                                );
-
-                                if response.clicked() {
-                                    window_manager.rename_group(*group_id, group_name.clone());
-                                }
-                            });
-
-                            if tabs.is_empty()
-                                && ui
-                                    .small_button("×")
-                                    .on_hover_cursor(egui::CursorIcon::PointingHand)
-                                    .clicked()
-                            {
-                                actions.group_actions.push((
-                                    *group_id,
-                                    String::from("remove_group"),
-                                    Vec::new(),
-                                ));
-                            }
-                        });
-
-                        ui.add_space(10.0);
-
-                        for tab_info in tabs {
-                            let tab_id = tab_info.id;
-                            let tab_name = tab_manager.get_tab_name(*group_id, tab_id);
-                            let is_active = active_tab_id == Some(tab_id);
-
-                            ui.horizontal(|ui| {
-                                let width = ui.available_width() * 0.9;
-                                let label = egui::Button::selectable(is_active, tab_name)
-                                    .min_size(egui::vec2(width, 0.0));
-                                let response = ui
-                                    .add(label)
-                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-                                if response.clicked() {
-                                    actions.group_actions.push((
-                                        *group_id,
-                                        String::from("select_tab"),
-                                        vec![(tab_id, false)],
-                                    ));
-                                }
-
-                                let close_btn = ui
-                                    .add(egui::Button::new("✖").min_size(egui::vec2(30.0, 0.0)))
-                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-                                if close_btn.clicked() {
-                                    actions.group_actions.push((
-                                        *group_id,
-                                        String::from("remove_tab"),
-                                        vec![(tab_id, false)],
-                                    ));
-                                }
-                            });
-                        }
-
-                        ui.horizontal(|ui| {
-                            let terminal_btn = ui
-                                .add(
-                                    egui::Button::new("➕ Terminal")
-                                        .min_size(egui::vec2(0.0, 16.0)),
-                                )
+    if show_sidebar {
+        egui::SidePanel::left("left_panel")
+            .default_width(100.0)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.style_mut().spacing.interact_size = egui::vec2(120.0, 24.0);
+                        ui.style_mut()
+                            .text_styles
+                            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+                        ui.add_space(8.0);
+                        if groups_to_render.is_empty() {
+                            let add_project_btn = ui
+                                .button("➕ Add project")
                                 .on_hover_cursor(egui::CursorIcon::PointingHand);
-                            if terminal_btn.clicked() {
-                                actions.add_tab_to_group = Some(*group_id);
+                            if add_project_btn.clicked() {
+                                actions.add_group_clicked = true;
                             }
-                            let agent_btn = ui
-                                .add(egui::Button::new("➕ Agent").min_size(egui::vec2(0.0, 16.0)))
-                                .on_hover_cursor(egui::CursorIcon::PointingHand);
-                            if agent_btn.clicked() {
-                                actions.add_agent_tab_to_group = Some(*group_id);
-                            }
-                        });
+                        } else {
+                            ui.label("My projects");
+                        }
+                        ui.add_space(8.0);
 
                         ui.separator();
-                    }
-                });
-        });
+
+                        for (group_id, group_name, tabs) in &groups_to_render {
+                            let is_selected = active_group_id == Some(*group_id);
+
+                            ui.horizontal(|ui| {
+                                ui.centered_and_justified(|ui| {
+                                    let sense = egui::Sense::click_and_drag();
+                                    let response =
+                                        ui.allocate_rect(ui.available_rect_before_wrap(), sense);
+
+                                    let text_color = if response.hovered() {
+                                        ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
+                                        egui::Color32::LIGHT_BLUE
+                                    } else if is_selected {
+                                        ui.visuals().selection.stroke.color
+                                    } else {
+                                        ui.visuals().text_color()
+                                    };
+
+                                    ui.painter().text(
+                                        response.rect.center(),
+                                        egui::Align2::CENTER_CENTER,
+                                        group_name,
+                                        egui::FontId::proportional(18.0),
+                                        text_color,
+                                    );
+
+                                    if response.clicked() {
+                                        window_manager.rename_group(*group_id, group_name.clone());
+                                    }
+                                });
+
+                                if tabs.is_empty()
+                                    && ui
+                                        .small_button("×")
+                                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                                        .clicked()
+                                {
+                                    actions.group_actions.push((
+                                        *group_id,
+                                        String::from("remove_group"),
+                                        Vec::new(),
+                                    ));
+                                }
+                            });
+
+                            ui.add_space(10.0);
+
+                            for tab_info in tabs {
+                                let tab_id = tab_info.id;
+                                let tab_name = tab_manager.get_tab_name(*group_id, tab_id);
+                                let is_active = active_tab_id == Some(tab_id);
+
+                                ui.horizontal(|ui| {
+                                    let width = ui.available_width() * 0.9;
+                                    let label = egui::Button::selectable(is_active, tab_name)
+                                        .min_size(egui::vec2(width, 0.0));
+                                    let response = ui
+                                        .add(label)
+                                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                    if response.clicked() {
+                                        actions.group_actions.push((
+                                            *group_id,
+                                            String::from("select_tab"),
+                                            vec![(tab_id, false)],
+                                        ));
+                                    }
+
+                                    let close_btn = ui
+                                        .add(egui::Button::new("✖").min_size(egui::vec2(30.0, 0.0)))
+                                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                    if close_btn.clicked() {
+                                        actions.group_actions.push((
+                                            *group_id,
+                                            String::from("remove_tab"),
+                                            vec![(tab_id, false)],
+                                        ));
+                                    }
+                                });
+                            }
+
+                            ui.horizontal(|ui| {
+                                let terminal_btn = ui
+                                    .add(
+                                        egui::Button::new("➕ Terminal")
+                                            .min_size(egui::vec2(0.0, 16.0)),
+                                    )
+                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                if terminal_btn.clicked() {
+                                    actions.add_tab_to_group = Some(*group_id);
+                                }
+                                let agent_btn = ui
+                                    .add(
+                                        egui::Button::new("➕ Agent")
+                                            .min_size(egui::vec2(0.0, 16.0)),
+                                    )
+                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                if agent_btn.clicked() {
+                                    actions.add_agent_tab_to_group = Some(*group_id);
+                                }
+                            });
+
+                            ui.separator();
+                        }
+                    });
+            });
+    }
 
     actions
 }
