@@ -1,0 +1,7 @@
+origin: Oleg Orlov
+label: yaaa PPA
+suite: stable
+codename: stable
+architectures: amd64 arm64
+components: main
+description: Yet Another AI Agent - PPA Repository
