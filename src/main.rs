@@ -6,6 +6,7 @@ use egui::IconData;
 mod app;
 mod config;
 mod constants;
+mod font_setup;
 mod hotkeys;
 mod menu;
 mod terminal;

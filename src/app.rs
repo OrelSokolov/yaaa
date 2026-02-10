@@ -21,6 +21,9 @@ pub struct App {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Setup fonts with fontconfig fallback
+        crate::font_setup::setup_fonts_with_fallback(&cc.egui_ctx);
+
         let (command_sender, command_receiver) = mpsc::channel();
         let command_sender_clone = command_sender.clone();
 
