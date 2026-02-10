@@ -13,7 +13,7 @@ eframe = { version = "0.33", default-features = false, features = [
     "persistence",
 ] }
 log = "0.4"
- egui_term = { git = "https://github.com/OrelSokolov/egui_term.git", rev = "5f6065f594b29462f082d57d962f569a5ee34f98" }
+ egui_term = { git = "https://github.com/OrelSokolov/egui_term.git", rev = "771ea50" }
  arboard = "3.2"
  wgpu = "27"
 serde = { version = "1.0", features = ["derive"] }
