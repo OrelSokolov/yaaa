@@ -4924,6 +4924,7 @@ name = "yaaa"
 version = "0.3.9"
 dependencies = [
  "alacritty_terminal",
+ "arboard",
  "cargo-deb",
  "dirs",
  "eframe",

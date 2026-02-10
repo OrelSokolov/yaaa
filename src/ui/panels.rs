@@ -1,4 +1,17 @@
+use crate::menu::apply_menu_style;
 use crate::terminal::{TabInfo, TabManager, TerminalBackendExt};
+
+fn copy_to_clipboard(text: &str) {
+    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+        let _ = clipboard.set_text(text);
+    }
+}
+
+fn paste_from_clipboard() -> Option<String> {
+    arboard::Clipboard::new()
+        .and_then(|mut clipboard| clipboard.get_text())
+        .ok()
+}
 
 pub struct PanelActions {
     pub add_group_clicked: bool,
@@ -221,7 +234,29 @@ pub fn show_central_panel(
                         )
                         .set_size(ui.available_size());
 
-                    ui.add(terminal);
+                    let response = ui.add(terminal);
+
+                    let selected_text = tab.backend.selectable_content();
+
+                    response.context_menu(|ui| {
+                        apply_menu_style(ui);
+
+                        if !selected_text.is_empty() {
+                            if ui.button("📋 Copy").clicked() {
+                                copy_to_clipboard(&selected_text);
+                                ui.close();
+                            }
+                        }
+                        if ui.button("📝 Paste").clicked() {
+                            if let Some(text) = paste_from_clipboard() {
+                                tab.backend
+                                    .process_command(egui_term::BackendCommand::Write(
+                                        text.into_bytes(),
+                                    ));
+                            }
+                            ui.close();
+                        }
+                    });
 
                     if tab.just_created {
                         tab.just_created = false;
