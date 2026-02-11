@@ -5,6 +5,7 @@ pub struct WindowManager {
     pub show_hotkeys: bool,
     pub show_settings: bool,
     pub show_rename_group: bool,
+    pub show_close_confirmation: bool,
     pub rename_group_id: Option<u64>,
     pub rename_group_name: String,
     pub editing_default_shell_cmd: String,
@@ -34,6 +35,7 @@ impl WindowManager {
             show_hotkeys: false,
             show_settings: false,
             show_rename_group: false,
+            show_close_confirmation: false,
             rename_group_id: None,
             rename_group_name: String::new(),
             editing_default_shell_cmd,
@@ -53,6 +55,7 @@ impl WindowManager {
         self.show_hotkeys_window(ctx);
         self.show_rename_group_window(ctx, &mut actions);
         self.show_settings_window(ctx, &mut actions);
+        self.show_close_confirmation_window(ctx, &mut actions);
 
         actions
     }
@@ -214,6 +217,37 @@ impl WindowManager {
         self.rename_group_name = name;
         self.show_rename_group = true;
     }
+
+    fn show_close_confirmation_window(&mut self, ctx: &egui::Context, actions: &mut WindowActions) {
+        let mut confirmed = false;
+        let mut cancelled = false;
+
+        egui::Window::new("Confirm Exit")
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut self.show_close_confirmation)
+            .show(ctx, |ui| {
+                egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
+                    ui.heading("Are you sure?");
+                    ui.add_space(15.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("Yes").clicked() {
+                            confirmed = true;
+                        }
+                        if ui.button("No").clicked() {
+                            cancelled = true;
+                        }
+                    });
+                });
+            });
+
+        if confirmed {
+            actions.close_confirmed = true;
+            self.show_close_confirmation = false;
+        }
+        if cancelled {
+            self.show_close_confirmation = false;
+        }
+    }
 }
 
 #[derive(Default)]
@@ -224,4 +258,5 @@ pub struct WindowActions {
     pub run_as_login_shell: Option<bool>,
     pub should_save_groups: bool,
     pub should_save_settings: bool,
+    pub close_confirmed: bool,
 }

@@ -245,7 +245,8 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if ctx.input(|i| i.viewport().close_requested()) {
-            self.tab_manager.clear();
+            self.window_manager.show_close_confirmation = true;
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
 
         egui::TopBottomPanel::top("menu_bar")
@@ -423,6 +424,11 @@ impl eframe::App for App {
         self.handle_command_events();
 
         self.handle_panel_actions(panel_actions);
+
+        if window_actions.close_confirmed {
+            self.tab_manager.clear();
+            std::process::exit(0);
+        }
 
         self.handle_window_actions(window_actions);
 
