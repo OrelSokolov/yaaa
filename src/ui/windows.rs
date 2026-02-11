@@ -230,10 +230,16 @@ impl WindowManager {
                     ui.heading("Are you sure?");
                     ui.add_space(15.0);
                     ui.horizontal(|ui| {
-                        if ui.button("Yes").clicked() {
+                        if ui
+                            .add(egui::Button::new("Yes").min_size(egui::vec2(80.0, 32.0)))
+                            .clicked()
+                        {
                             confirmed = true;
                         }
-                        if ui.button("No").clicked() {
+                        if ui
+                            .add(egui::Button::new("No").min_size(egui::vec2(80.0, 32.0)))
+                            .clicked()
+                        {
                             cancelled = true;
                         }
                     });
