@@ -3,7 +3,8 @@ use crate::hotkeys::handle_keyboard_events;
 use crate::menu::apply_menu_style;
 use crate::terminal::TabManager;
 use crate::ui::{
-    show_central_panel, show_debug_panel, show_left_panel, WindowActions, WindowManager,
+    show_central_panel, show_debug_panel, show_left_panel, show_search_panel, WindowActions,
+    WindowManager,
 };
 use egui_term::BackendCommand;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -144,6 +145,17 @@ impl App {
         if events.scroll_page_down {
             if let Some(tab) = self.tab_manager.get_active() {
                 tab.backend.process_command(BackendCommand::ScrollPageDown);
+            }
+        }
+
+        if events.toggle_search {
+            if let Some(tab) = self.tab_manager.get_active() {
+                tab.search_active = !tab.search_active;
+                tab.backend.search_set_active(tab.search_active);
+                if tab.search_active {
+                    tab.search_query.clear();
+                    tab.search_just_opened = true;
+                }
             }
         }
 
@@ -417,6 +429,8 @@ impl eframe::App for App {
             self.show_terminal_lines,
             &mut self.tab_manager,
         );
+
+        show_search_panel(ctx, &mut self.tab_manager);
 
         let (_close_tab, close_tab_id, add_tab_to_group, add_agent_tab_to_group) =
             self.handle_keyboard(ctx);

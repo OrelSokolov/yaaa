@@ -12,6 +12,7 @@ pub fn get_hotkeys() -> BTreeMap<&'static str, &'static str> {
     hotkeys.insert("Ctrl + Shift + Page Down", "Scroll terminal one page down");
     hotkeys.insert("Ctrl + Shift + Home", "Scroll terminal to top");
     hotkeys.insert("Ctrl + Shift + End", "Scroll terminal to bottom");
+    hotkeys.insert("Ctrl + F", "Toggle search in terminal");
     hotkeys
 }
 
@@ -25,6 +26,7 @@ pub struct KeyboardEvents {
     pub scroll_to_bottom: bool,
     pub scroll_page_up: bool,
     pub scroll_page_down: bool,
+    pub toggle_search: bool,
 }
 
 pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> KeyboardEvents {
@@ -40,6 +42,7 @@ pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> Keybo
         scroll_to_bottom: false,
         scroll_page_up: false,
         scroll_page_down: false,
+        toggle_search: false,
     };
 
     if input.key_pressed(egui::Key::Tab) && input.modifiers.ctrl {
@@ -108,6 +111,11 @@ pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> Keybo
     {
         ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::PageDown));
         events.scroll_page_down = true;
+    }
+
+    if active_group_exists && input.key_pressed(egui::Key::F) && input.modifiers.ctrl {
+        ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::F));
+        events.toggle_search = true;
     }
 
     events

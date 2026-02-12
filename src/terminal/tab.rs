@@ -52,6 +52,9 @@ pub struct Tab {
     pub was_alternate_last_frame: bool,
     pub just_created: bool,
     pub is_agent: bool,
+    pub search_active: bool,
+    pub search_query: String,
+    pub search_just_opened: bool,
 }
 
 impl Tab {
@@ -170,6 +173,9 @@ impl Tab {
             was_alternate_last_frame: false,
             just_created: true,
             is_agent,
+            search_active: false,
+            search_query: String::new(),
+            search_just_opened: false,
         }
     }
 

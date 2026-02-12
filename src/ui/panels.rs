@@ -183,6 +183,78 @@ pub fn show_left_panel(
     actions
 }
 
+pub fn show_search_panel(ctx: &egui::Context, tab_manager: &mut TabManager) {
+    let Some(tab) = tab_manager.get_active() else {
+        return;
+    };
+
+    if !tab.search_active {
+        return;
+    }
+
+    let backend_id = tab.backend.id();
+    let search_no_match = tab.backend.last_content().search_state.no_match;
+    let search_textedit_id = egui::Id::new("search_input").with(backend_id);
+
+    if tab.search_just_opened {
+        ctx.memory_mut(|m| m.request_focus(search_textedit_id));
+        tab.search_just_opened = false;
+    }
+
+    egui::TopBottomPanel::bottom("search_panel")
+        .resizable(false)
+        .show_separator_line(false)
+        .default_height(40.0)
+        .show(ctx, |ui| {
+            egui::Frame::NONE
+                .inner_margin(egui::vec2(8.0, 6.0))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        let query_response = ui.add(
+                            egui::TextEdit::singleline(&mut tab.search_query)
+                                .id(search_textedit_id)
+                                .desired_width(150.0)
+                                .hint_text("Search...")
+                                .min_size(egui::vec2(0.0, 20.0)),
+                        );
+
+                        if query_response.changed() {
+                            tab.backend.search_set_query(&tab.search_query);
+                        }
+
+                        if ui
+                            .add(egui::Button::new("⏶").min_size(egui::vec2(24.0, 24.0)))
+                            .clicked()
+                        {
+                            if let Some(point) = tab.backend.search_prev() {
+                                tab.backend.scroll_to_point(point);
+                            }
+                        }
+
+                        if ui
+                            .add(egui::Button::new("⏷").min_size(egui::vec2(24.0, 24.0)))
+                            .clicked()
+                        {
+                            if let Some(point) = tab.backend.search_next() {
+                                tab.backend.scroll_to_point(point);
+                            }
+                        }
+
+                        if ui
+                            .add(egui::Button::new("Search").min_size(egui::vec2(0.0, 24.0)))
+                            .clicked()
+                        {
+                            tab.backend.search_set_query(&tab.search_query);
+                        }
+
+                        if search_no_match && !tab.search_query.is_empty() {
+                            ui.label(egui::RichText::new("No matches"));
+                        }
+                    });
+                });
+        });
+}
+
 pub fn show_central_panel(
     ctx: &egui::Context,
     tab_manager: &mut TabManager,
@@ -196,6 +268,7 @@ pub fn show_central_panel(
                 .contains(egui_term::TerminalMode::ALT_SCREEN);
             let total_lines = tab.backend.total_lines();
             let viewport_height = ui.available_height();
+            let backend_id = tab.backend.id();
 
             let mode_switched = tab.was_alternate_last_frame != is_alternate;
             let terminal_cleared =
@@ -218,7 +291,7 @@ pub fn show_central_panel(
             let scroll_state = tab.scroll_state.current(is_alternate);
 
             egui::ScrollArea::vertical()
-                .id_salt(("terminal", tab.backend.id()))
+                .id_salt(("terminal", backend_id))
                 .max_height(viewport_height)
                 .auto_shrink([false, false])
                 .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
@@ -230,7 +303,8 @@ pub fn show_central_panel(
                         .set_focus(
                             !window_manager.show_rename_group
                                 && !window_manager.show_settings
-                                && !should_block_input,
+                                && !should_block_input
+                                && !tab.search_active,
                         )
                         .set_size(ui.available_size());
 
