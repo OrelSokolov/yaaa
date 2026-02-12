@@ -43,7 +43,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup APT Repository on GitHub Pages
-        uses: smeinecke/apt-repo-action@v2
+        uses: smeinecke/apt-repo-action@v2.1.4
         with:
           github_token: ${{ github.token }}
           repo_supported_arch: |
