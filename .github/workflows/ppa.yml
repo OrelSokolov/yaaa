@@ -1,0 +1,64 @@
+name: Build and Publish to PPA
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev apt-utils gnupg2
+
+      - name: Build Release
+        run: cargo build --release --locked
+
+      - name: Build Debian Package
+        run: cargo deb
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/debian/*.deb
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup APT Repository on GitHub Pages
+        uses: smeinecke/apt-repo-action@v2.2
+        with:
+          github_token: ${{ github.token }}
+          repo_supported_arch: |
+            amd64
+          repo_supported_version: |
+            bookworm
+            bullseye
+            trixie
+            jammy
+            noble
+          file: |
+            target/debian/*.deb
+          file_target_version: "noble"
+          private_key: ${{ secrets.APT_SIGNING_KEY }}
+          public_key: ${{ secrets.APT_SIGNING_PUBKEY }}
+          key_passphrase: ${{ secrets.APT_SIGNING_KEY_PASSPHRASE }}
+          page_branch: "gh-pages"
+          repo_folder: ""
