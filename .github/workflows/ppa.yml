@@ -42,6 +42,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Debug Secrets (check if they exist)
+        run: |
+          if [ -n "${{ secrets.APT_SIGNING_KEY }}" ]; then
+            echo "✓ APT_SIGNING_KEY is set"
+          else
+            echo "✗ APT_SIGNING_KEY is NOT set"
+          fi
+          if [ -n "${{ secrets.APT_SIGNING_PUBKEY }}" ]; then
+            echo "✓ APT_SIGNING_PUBKEY is set"
+          else
+            echo "✗ APT_SIGNING_PUBKEY is NOT set"
+          fi
+          if [ -n "${{ secrets.APT_SIGNING_KEY_PASSPHRASE }}" ]; then
+            echo "✓ APT_SIGNING_KEY_PASSPHRASE is set"
+          else
+            echo "✗ APT_SIGNING_KEY_PASSPHRASE is NOT set (optional)"
+          fi
+
       - name: Setup APT Repository on GitHub Pages
         uses: smeinecke/apt-repo-action@v2.1.4
         with:
