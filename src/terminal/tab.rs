@@ -66,10 +66,13 @@ impl Tab {
     }
 
     pub fn command_exists(cmd: &str) -> bool {
+        // Extract just the program name (first word) from the command
+        let program = cmd.split_whitespace().next().unwrap_or(cmd);
+        
         #[cfg(unix)]
         {
             use std::process::Command;
-            if let Ok(output) = Command::new("which").arg(cmd).output() {
+            if let Ok(output) = Command::new("which").arg(program).output() {
                 output.status.success()
             } else {
                 false
@@ -79,7 +82,7 @@ impl Tab {
         {
             use std::process::Command;
             Command::new("where")
-                .arg(cmd)
+                .arg(program)
                 .output()
                 .map_or(false, |output| output.status.success())
         }
@@ -128,11 +131,21 @@ impl Tab {
     ) -> Self {
         let mut shell = Self::resolve_shell(shell_cmd, is_agent);
 
-        let args = if run_as_login_shell {
-            vec!["--login".to_string()]
-        } else {
-            vec![]
-        };
+        // Parse agent command to extract program and arguments
+        let mut args: Vec<String> = Vec::new();
+        if is_agent {
+            let parts: Vec<&str> = shell_cmd.split_whitespace().collect();
+            if parts.len() > 1 {
+                // First part is the program, rest are arguments
+                shell = parts[0].to_string();
+                args = parts[1..].iter().map(|s| s.to_string()).collect();
+            }
+        }
+
+        // Add login shell flag if needed (only for non-agent shells)
+        if run_as_login_shell && !is_agent {
+            args.push("--login".to_string());
+        }
 
         let backend = loop {
             let result = TerminalBackend::new(
