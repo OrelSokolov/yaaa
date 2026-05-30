@@ -215,6 +215,7 @@ impl App {
                 "remove_tab" => {
                     if let Some(tab_id) = data.first() {
                         self.tab_manager.remove(tab_id.0);
+                        self.tab_manager.save_groups();
                     }
                 }
                 _ => {}

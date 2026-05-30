@@ -1282,7 +1282,7 @@ dependencies = [
 [[package]]
 name = "egui_term"
 version = "0.1.0"
-source = "git+https://github.com/OrelSokolov/egui_term.git?rev=56ce716#56ce7163daf8aca403061bd4f9f1c3f33de325cc"
+source = "git+https://github.com/OrelSokolov/egui_term.git?rev=ae6e348#ae6e3486257543b8082ce05db8665a61ea82ff6c"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
@@ -5186,7 +5186,7 @@ dependencies = [
 
 [[package]]
 name = "yaaa"
-version = "0.3.14"
+version = "0.3.17"
 dependencies = [
  "alacritty_terminal",
  "arboard",
