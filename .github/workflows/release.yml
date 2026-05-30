@@ -26,6 +26,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Clone egui_term fork
+        run: git clone https://github.com/OrelSokolov/egui_term.git ../egui_term
+
+      - name: Apply Windows patch to egui_term
+        if: matrix.os == 'windows-latest'
+        run: git -C ../egui_term apply ${{ github.workspace }}/patches/egui_term-windows.patch
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
