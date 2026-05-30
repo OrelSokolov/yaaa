@@ -13,7 +13,7 @@ eframe = { version = "0.33", default-features = false, features = [
     "persistence",
 ] }
 log = "0.4"
- egui_term = { git = "https://github.com/OrelSokolov/egui_term.git", rev = "ae6e348" }
+ egui_term = { git = "https://github.com/OrelSokolov/egui_term.git", rev = "01c3aea" }
  arboard = "3.2"
  wgpu = "27"
 serde = { version = "1.0", features = ["derive"] }
@@ -27,13 +27,16 @@ rust-fontconfig = "1.2.1"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11.6"
 
-[build-dependencies]
-cargo-deb = "2"
-
 [features]
 default = []
 x11 = ["eframe/x11"]
 wayland = ["eframe/wayland"]
+
+[package.metadata.wix]
+upgrade-guid = "E42C30AE-2D54-40C5-9A52-5F3C9CBDC7DE"
+path-guid = "B5F00811-0320-4FE6-8FE4-F7527DFA1765"
+license = false
+icon-path = "assets/logo.ico"
 
 [package.metadata.deb]
 name = "yaaa"
