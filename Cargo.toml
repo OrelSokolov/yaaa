@@ -3,6 +3,8 @@ name = "yaaa"
 version = "0.3.17"
 edition = "2021"
 description = "Yet Another AI Agent"
+authors = ["Oleg Orlov <orelcokolov@gmail.com>"]
+license = "MIT"
 
 [dependencies]
 egui = "0.33"
