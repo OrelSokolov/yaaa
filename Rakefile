@@ -99,6 +99,11 @@ namespace :build do
 
     ensure_cargo_wix
 
+    unless Dir.glob('wix/**/*.wxs').any?
+      puts 'Initializing WiX source files...'
+      sh 'cargo wix init'
+    end
+
     puts 'Creating MSI...'
     FileUtils.rm_f(msi_path)
     sh "cargo wix --no-build --output '#{msi_path}'"
