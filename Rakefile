@@ -106,7 +106,7 @@ namespace :build do
 
     puts 'Creating MSI...'
     FileUtils.rm_f(msi_path)
-    sh "cargo wix --no-build --output '#{msi_path}'"
+    sh 'cargo', 'wix', '--no-build', '--output', msi_path
 
     puts "Done: #{msi_path}"
   end
