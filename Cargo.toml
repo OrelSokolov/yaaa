@@ -7,15 +7,15 @@ authors = ["Oleg Orlov <orelcokolov@gmail.com>"]
 license = "MIT"
 
 [dependencies]
-egui = "0.33"
-eframe = { version = "0.33", default-features = false, features = [
+egui = "0.34"
+eframe = { version = "0.34", default-features = false, features = [
     "accesskit",
     "default_fonts",
     "wgpu",
     "persistence",
 ] }
 log = "0.4"
- egui_term = { git = "https://github.com/OrelSokolov/egui_term.git", rev = "48fbc5daeea222fe862f0958f637817e784bd7e3" }
+ egui_term = { git = "https://github.com/OrelSokolov/egui_term.git", rev = "d7fa9d1bff47dda2a095c4c9a932e4d1170efe38" }
  arboard = "3.2"
  wgpu = "27"
 serde = { version = "1.0", features = ["derive"] }

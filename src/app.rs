@@ -256,7 +256,8 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx();
         if ctx.input(|i| i.viewport().close_requested()) {
             self.window_manager.show_close_confirmation = true;
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
