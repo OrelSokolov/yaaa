@@ -1,6 +1,6 @@
 [package]
 name = "yaaa"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "Yet Another AI Agent"
 authors = ["Oleg Orlov <orelcokolov@gmail.com>"]
@@ -17,7 +17,6 @@ eframe = { version = "0.34", default-features = false, features = [
 log = "0.4"
  egui_term = { git = "https://github.com/OrelSokolov/egui_term.git", rev = "d7fa9d1bff47dda2a095c4c9a932e4d1170efe38" }
  arboard = "3.2"
- wgpu = "27"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dirs = "5.0"
