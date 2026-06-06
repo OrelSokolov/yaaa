@@ -19,12 +19,27 @@ fn main() -> eframe::Result {
 
     let icon = load_icon();
 
+    // Пробуем Wgpu (Metal/DirectX/Vulkan) — быстрее на современном железе.
+    // Если не удалось (например, нет Metal в VMware), падаем на Glow (OpenGL).
+    if let Err(err) = try_run(eframe::Renderer::Wgpu, icon.clone()) {
+        if let eframe::Error::Wgpu(_) = &err {
+            log::warn!("Wgpu renderer failed: {err}. Falling back to Glow (OpenGL).");
+            return try_run(eframe::Renderer::Glow, icon);
+        }
+        return Err(err);
+    }
+
+    Ok(())
+}
+
+fn try_run(renderer: eframe::Renderer, icon: IconData) -> eframe::Result {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([400.0, 300.0])
             .with_min_inner_size([300.0, 220.0])
             .with_title("Yet Another AI Agent")
             .with_icon(icon),
+        renderer,
         ..Default::default()
     };
 

@@ -78,6 +78,9 @@ namespace :build do
 
     File.write("#{app_bundle}/Contents/Info.plist", info_plist)
 
+    puts 'Signing .app bundle (ad-hoc)...'
+    sh "codesign --force --deep --sign - '#{app_bundle}'"
+
     puts 'Creating DMG...'
     FileUtils.rm_f(dmg_path)
     sh "hdiutil create -volname '#{app_name}' -srcfolder '#{app_bundle}' -ov -format UDZO '#{dmg_path}'"
