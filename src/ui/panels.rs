@@ -310,15 +310,15 @@ pub fn show_central_panel(
 
                     let response = ui.add(terminal);
 
-                    let selected_text = tab.backend.selectable_content();
-                    let stripped_text: String = selected_text
-                        .split('\n')
-                        .map(|line| line.trim_end())
-                        .collect::<Vec<_>>()
-                        .join("\n");
-
                     response.context_menu(|ui| {
                         apply_menu_style(ui);
+
+                        let selected_text = tab.backend.selectable_content();
+                        let stripped_text: String = selected_text
+                            .split('\n')
+                            .map(|line| line.trim_end())
+                            .collect::<Vec<_>>()
+                            .join("\n");
 
                         if !stripped_text.is_empty() {
                             if ui.button("📋 Copy").clicked() {
