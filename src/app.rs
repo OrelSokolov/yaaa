@@ -107,7 +107,7 @@ impl App {
     }
 
     fn handle_command_events(&mut self) {
-        if let Ok((tab_id, event)) = self.command_receiver.try_recv() {
+        while let Ok((tab_id, event)) = self.command_receiver.try_recv() {
             match event {
                 egui_term::PtyEvent::Exit => {
                     self.tab_manager.remove(tab_id);
@@ -199,17 +199,14 @@ impl App {
         )
     }
 
-    fn handle_panel_actions(&mut self, actions: super::ui::panels::PanelActions) {
+    fn handle_panel_actions(&mut self, ctx: &egui::Context, actions: super::ui::panels::PanelActions) {
         if actions.add_group_clicked {
             if let Some(path) = rfd::FileDialog::new().pick_folder() {
                 let name = crate::terminal::manager::TabGroup::name_from_path(&path);
                 self.recent_projects.add_project(name.clone(), path.clone());
                 self.save_recent_projects();
                 self.tab_manager.add_group_with_path(
-                    self.tab_manager
-                        .active_tab_id
-                        .map(|_| egui::Context::default())
-                        .unwrap_or_else(|| egui::Context::default()),
+                    ctx.clone(),
                     Some(path),
                 );
                 self.tab_manager.save_groups();
@@ -218,13 +215,13 @@ impl App {
 
         if let Some(group_id) = actions.add_tab_to_group {
             self.tab_manager
-                .add_tab_to_group(group_id, self.get_egui_ctx(), false);
+                .add_tab_to_group(group_id, ctx.clone(), false);
             self.tab_manager.save_groups();
         }
 
         if let Some(group_id) = actions.add_agent_tab_to_group {
             self.tab_manager
-                .add_tab_to_group(group_id, self.get_egui_ctx(), true);
+                .add_tab_to_group(group_id, ctx.clone(), true);
             self.tab_manager.save_groups();
         }
 
@@ -282,9 +279,6 @@ impl App {
         }
     }
 
-    fn get_egui_ctx(&self) -> egui::Context {
-        self.egui_ctx.clone()
-    }
 }
 
 impl eframe::App for App {
@@ -477,7 +471,7 @@ impl eframe::App for App {
 
         self.handle_command_events();
 
-        self.handle_panel_actions(panel_actions);
+        self.handle_panel_actions(ctx, panel_actions);
 
         if window_actions.close_confirmed {
             self.tab_manager.clear();
