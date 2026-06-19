@@ -31,3 +31,13 @@ To install to a custom directory (default is `/Applications`):
 ```bash
 curl -fsSL https://raw.githubusercontent.com/OrelSokolov/yaaa/master/install.rb | YAAA_INSTALL=~/Applications ruby
 ```
+
+## Development
+
+Enable the shared git hooks to catch `Cargo.lock` drift before committing:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The pre-commit hook runs `cargo metadata --locked` whenever `Cargo.toml` or `Cargo.lock` are staged, so version bumps without an updated lock file are blocked locally.
