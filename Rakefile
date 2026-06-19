@@ -19,6 +19,41 @@ def ensure_cargo_wix
   sh 'cargo install cargo-wix'
 end
 
+def ensure_rust_target(target)
+  return if system("rustup target list --installed | grep -q '^#{target}$'")
+
+  puts "Installing Rust target #{target}..."
+  sh "rustup target add #{target}"
+end
+
+def host_target
+  @host_target ||= `rustc -vV`.match(/host: (\S+)/)[1]
+end
+
+def build_universal_binary
+  arm_target = 'aarch64-apple-darwin'
+  x86_target = 'x86_64-apple-darwin'
+
+  ensure_rust_target(arm_target)
+  ensure_rust_target(x86_target)
+
+  puts "Building release binary for #{arm_target}..."
+  sh "cargo build --release --target #{arm_target}"
+
+  puts "Building release binary for #{x86_target}..."
+  sh "cargo build --release --target #{x86_target}"
+
+  arm_binary = "target/#{arm_target}/release/#{PACKAGE_NAME}"
+  x86_binary = "target/#{x86_target}/release/#{PACKAGE_NAME}"
+  fat_binary = "target/release/#{PACKAGE_NAME}"
+
+  FileUtils.mkdir_p('target/release')
+  puts 'Creating universal binary...'
+  sh "lipo -create '#{arm_binary}' '#{x86_binary}' -output '#{fat_binary}'"
+
+  puts `lipo -info '#{fat_binary}'`
+end
+
 namespace :build do
   desc 'Build Debian package'
   task :deb do
@@ -38,8 +73,8 @@ namespace :build do
     resources_dir = "#{app_bundle}/Contents/Resources"
     dmg_path = "target/release/#{PACKAGE_NAME}_#{VERSION}_macos.dmg"
 
-    puts 'Building release binary...'
-    sh 'cargo build --release'
+    puts 'Building release binaries...'
+    build_universal_binary
 
     puts 'Creating .app bundle...'
     FileUtils.rm_rf(app_bundle)
@@ -48,6 +83,7 @@ namespace :build do
 
     FileUtils.cp('target/release/yaaa', "#{macos_dir}/#{PACKAGE_NAME}")
     FileUtils.cp('assets/logo.png', "#{resources_dir}/logo.png") if File.exist?('assets/logo.png')
+    FileUtils.cp('assets/logo.icns', "#{resources_dir}/logo.icns") if File.exist?('assets/logo.icns')
 
     info_plist = <<~PLIST
       <?xml version="1.0" encoding="UTF-8"?>
@@ -68,6 +104,8 @@ namespace :build do
         <string>#{PACKAGE_NAME}</string>
         <key>CFBundlePackageType</key>
         <string>APPL</string>
+        <key>CFBundleIconFile</key>
+        <string>logo.icns</string>
         <key>LSMinimumSystemVersion</key>
         <string>10.15</string>
         <key>NSHighResolutionCapable</key>
