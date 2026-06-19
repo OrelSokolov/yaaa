@@ -60,6 +60,25 @@ namespace :build do
     sh 'cargo deb'
   end
 
+  desc 'Build macOS universal binary (macOS only)'
+  task :macos_binary do
+    unless macos?
+      puts 'Error: macOS binary can only be built on macOS.'
+      exit 1
+    end
+
+    binary_path = "target/release/#{PACKAGE_NAME}-macos"
+
+    puts 'Building release binaries...'
+    build_universal_binary
+
+    puts "Copying universal binary to #{binary_path}..."
+    FileUtils.cp('target/release/yaaa', binary_path)
+    FileUtils.chmod(0755, binary_path)
+
+    puts "Done: #{binary_path}"
+  end
+
   desc 'Build macOS DMG (macOS only)'
   task :dmg do
     unless macos?

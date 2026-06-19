@@ -16,7 +16,7 @@ jobs:
             artifact_name: '*.deb'
             artifact_path: target/debian
           - os: macos-latest
-            artifact_name: '*.dmg'
+            artifact_name: 'yaaa-macos'
             artifact_path: target/release
           - os: windows-latest
             artifact_name: '*.msi'
@@ -52,9 +52,9 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: cargo deb
 
-      - name: Build macOS DMG
+      - name: Build macOS binary
         if: matrix.os == 'macos-latest'
-        run: rake build:dmg
+        run: rake build:macos_binary
 
       - name: Build Windows MSI
         if: matrix.os == 'windows-latest'
