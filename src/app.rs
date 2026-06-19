@@ -20,8 +20,37 @@ pub struct App {
     pub show_sidebar: bool,
 }
 
+/// The application's default gray, used for the menu bar and (after styling)
+/// for panels and windows.
+const APP_GRAY: egui::Color32 = egui::Color32::from_rgb(0x20, 0x20, 0x20);
+
+fn app_visuals() -> egui::Visuals {
+    let mut visuals = egui::Visuals::dark();
+    visuals.panel_fill = APP_GRAY;
+    visuals.window_fill = APP_GRAY;
+    visuals
+}
+
+fn setup_visuals(ctx: &egui::Context) {
+    // Set both light and dark styles to the same gray look, then lock the active
+    // theme to Dark. This prevents macOS's light system theme from switching the
+    // UI to white after the first frame.
+    let visuals = app_visuals();
+    ctx.set_visuals_of(egui::Theme::Dark, visuals.clone());
+    ctx.set_visuals_of(egui::Theme::Light, visuals);
+    ctx.set_theme(egui::Theme::Dark);
+
+    // Force the native window chrome (title bar / traffic lights) to dark mode on macOS
+    // so it matches the rest of the UI instead of following the system light appearance.
+    ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark));
+}
+
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Force dark theme on all platforms so the UI stays gray (matching the
+        // menu bar) regardless of the system light/dark appearance.
+        setup_visuals(&cc.egui_ctx);
+
         // Setup fonts with fontconfig fallback
         crate::font_setup::setup_fonts_with_fallback(&cc.egui_ctx);
 
@@ -256,6 +285,12 @@ impl App {
 }
 
 impl eframe::App for App {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        // Paint the window background with the same opaque gray as the rest of the UI
+        // instead of the default semi-transparent clear color.
+        APP_GRAY.to_normalized_gamma_f32()
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx();
         if ctx.input(|i| i.viewport().close_requested()) {
