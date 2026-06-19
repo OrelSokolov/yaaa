@@ -23,7 +23,7 @@ Requires Ruby 2.6 or later (macOS ships with Ruby by default).
 To install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OrelSokolov/yaaa/master/install.rb | YAAA_VERSION=v0.4.3 ruby
+curl -fsSL https://raw.githubusercontent.com/OrelSokolov/yaaa/master/install.rb | YAAA_VERSION=v0.4.5 ruby
 ```
 
 To install to a custom directory (default is `/Applications`):

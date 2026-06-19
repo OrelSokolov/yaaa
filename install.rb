@@ -46,7 +46,11 @@ def install_dir
 end
 
 def binary_url
-  "https://github.com/#{GITHUB_USER}/#{GITHUB_REPO}/releases/download/#{version}/#{PACKAGE_NAME}-macos"
+  if version == 'latest'
+    "https://github.com/#{GITHUB_USER}/#{GITHUB_REPO}/releases/latest/download/#{PACKAGE_NAME}-macos"
+  else
+    "https://github.com/#{GITHUB_USER}/#{GITHUB_REPO}/releases/download/#{version}/#{PACKAGE_NAME}-macos"
+  end
 end
 
 def icon_url
