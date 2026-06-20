@@ -88,34 +88,67 @@ impl Tab {
         }
     }
 
-    pub fn resolve_shell(shell_cmd: &str, is_agent: bool) -> String {
-        if shell_cmd.is_empty() {
-            #[cfg(unix)]
-            return std::env::var("SHELL").unwrap_or_else(|_| "/usr/bin/bash".to_string());
-            #[cfg(windows)]
-            return "cmd.exe".to_string();
-        }
+    fn shell_candidates(shell_cmd: &str, is_agent: bool) -> Vec<String> {
+        let mut candidates: Vec<String> = Vec::new();
 
-        let mut candidates = vec![shell_cmd.to_string()];
+        if !shell_cmd.is_empty() {
+            candidates.push(shell_cmd.to_string());
+        }
 
         if is_agent {
             candidates.push("/usr/bin/bash".to_string());
+            candidates.push("/bin/bash".to_string());
             candidates.push("bash".to_string());
         }
 
         #[cfg(unix)]
-        candidates.push("/usr/bin/bash".to_string());
+        {
+            if let Ok(shell_env) = std::env::var("SHELL") {
+                if !shell_env.is_empty() {
+                    candidates.push(shell_env);
+                }
+            }
+            candidates.extend(
+                [
+                    "/bin/zsh",
+                    "/bin/bash",
+                    "/usr/bin/zsh",
+                    "/usr/bin/bash",
+                ]
+                .iter()
+                .map(|s| s.to_string()),
+            );
+        }
         #[cfg(windows)]
-        candidates.push("cmd.exe".to_string());
+        {
+            candidates.extend(
+                ["cmd.exe", "powershell.exe"]
+                    .iter()
+                    .map(|s| s.to_string()),
+            );
+        }
 
-        for candidate in candidates {
+        // Deduplicate while preserving order.
+        let mut seen = std::collections::HashSet::new();
+        candidates
+            .into_iter()
+            .filter(|c| seen.insert(c.clone()))
+            .collect()
+    }
+
+    pub fn resolve_shell(shell_cmd: &str, is_agent: bool) -> String {
+        for candidate in Self::shell_candidates(shell_cmd, is_agent) {
             if Self::command_exists(&candidate) {
                 return candidate;
             }
         }
 
+        if !shell_cmd.is_empty() {
+            return shell_cmd.to_string();
+        }
+
         #[cfg(unix)]
-        return "/usr/bin/bash".to_string();
+        return std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
         #[cfg(windows)]
         return "cmd.exe".to_string();
     }
@@ -129,14 +162,16 @@ impl Tab {
         is_agent: bool,
         run_as_login_shell: bool,
     ) -> Self {
-        let mut shell = Self::resolve_shell(shell_cmd, is_agent);
+        let mut candidates = Self::shell_candidates(shell_cmd, is_agent).into_iter();
 
-        // Parse agent command to extract program and arguments
+        // For agents the first candidate is the configured agent command and may
+        // include arguments. For regular shells the candidate is just the shell path.
+        let first = candidates.next().unwrap_or_else(|| Self::resolve_shell("", false));
+        let mut shell = first.clone();
         let mut args: Vec<String> = Vec::new();
         if is_agent {
-            let parts: Vec<&str> = shell_cmd.split_whitespace().collect();
+            let parts: Vec<&str> = first.split_whitespace().collect();
             if parts.len() > 1 {
-                // First part is the program, rest are arguments
                 shell = parts[0].to_string();
                 args = parts[1..].iter().map(|s| s.to_string()).collect();
             }
@@ -168,12 +203,15 @@ impl Tab {
                         shell, e
                     );
 
-                    let fallback = "/usr/bin/bash";
-                    if shell == fallback {
-                        panic!("Fallback shell '{}' also failed: {}", fallback, e);
-                    }
+                    let Some(next) = candidates.next() else {
+                        panic!("All fallback shells failed. Last error: {}", e);
+                    };
 
-                    shell = fallback.to_string();
+                    // Subsequent fallbacks are bare shell paths; clear agent args.
+                    shell = next;
+                    if is_agent {
+                        args.clear();
+                    }
                     eprintln!("Retrying with fallback shell: {}", shell);
                 }
             }

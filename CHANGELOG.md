@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.6] - 2026-06-20
+
+### Fixed
+- Remove hardcoded `/usr/bin/bash` fallback and use auto-detected shell chain (`$SHELL`, `/bin/zsh`, `/bin/bash`, `/usr/bin/zsh`, `/usr/bin/bash`) to prevent crashes on macOS systems without `/usr/bin/bash`.
+
 ## [0.3.7] - 2026-02-09
 
 ### Added
