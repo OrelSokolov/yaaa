@@ -53,7 +53,7 @@ impl App {
         // menu bar) regardless of the system light/dark appearance.
         setup_visuals(&cc.egui_ctx);
 
-        // Setup fonts with fontconfig fallback
+        // Setup fonts with optional system fallback
         crate::font_setup::setup_fonts_with_fallback(&cc.egui_ctx);
 
         let (command_sender, command_receiver) = mpsc::channel();
