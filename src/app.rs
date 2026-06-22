@@ -8,6 +8,7 @@ use crate::ui::{
 };
 use egui_term::BackendCommand;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::time::Duration;
 
 pub struct App {
     _command_sender: Sender<(u64, egui_term::PtyEvent)>,
@@ -15,6 +16,7 @@ pub struct App {
     tab_manager: TabManager,
     window_manager: WindowManager,
     recent_projects: RecentProjects,
+    egui_ctx: egui::Context,
     pub show_terminal_lines: bool,
     pub show_fps: bool,
     pub show_sidebar: bool,
@@ -81,6 +83,7 @@ impl App {
             tab_manager,
             window_manager,
             recent_projects,
+            egui_ctx: cc.egui_ctx.clone(),
             show_terminal_lines: settings.show_terminal_lines,
             show_fps: settings.show_fps,
             show_sidebar: settings.show_sidebar,
@@ -280,7 +283,7 @@ impl App {
     }
 
     fn get_egui_ctx(&self) -> egui::Context {
-        egui::Context::default()
+        self.egui_ctx.clone()
     }
 }
 
@@ -501,5 +504,23 @@ impl eframe::App for App {
         }
 
         show_central_panel(ctx, &mut self.tab_manager, &self.window_manager);
+
+        // The terminal backend updates its state on a background PTY thread, but
+        // alacritty_terminal does not emit events for ordinary screen output.
+        // Without a pending repaint request egui/eframe on macOS goes to sleep
+        // between input events, so terminal output appears to "stick" until a
+        // key is pressed or the mouse moves. Schedule the next repaint so the
+        // active tab stays live.
+        if self.tab_manager.active_tab_id.is_some() {
+            let viewport = ctx.input(|i| i.viewport().clone());
+            if viewport.visible().unwrap_or(true) {
+                let delay = if viewport.focused.unwrap_or(true) {
+                    Duration::from_millis(16)
+                } else {
+                    Duration::from_millis(100)
+                };
+                ctx.request_repaint_after(delay);
+            }
+        }
     }
 }
