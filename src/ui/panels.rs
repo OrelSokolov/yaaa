@@ -57,7 +57,7 @@ pub fn show_left_panel(
                         ui.style_mut().spacing.interact_size = egui::vec2(120.0, 24.0);
                         ui.style_mut()
                             .text_styles
-                            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+                            .insert(egui::TextStyle::Body, egui::FontId::proportional(15.0));
                         ui.add_space(8.0);
                         if groups_to_render.is_empty() {
                             let add_project_btn = ui
