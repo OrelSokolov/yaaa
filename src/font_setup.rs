@@ -7,6 +7,7 @@
 //! built-in default fonts cover the UI perfectly well on their own.
 
 use egui::{FontData, FontDefinitions, FontFamily, FontId};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 /// Initialize fonts with optional system fallback.
@@ -24,8 +25,7 @@ pub fn setup_fonts_with_fallback(ctx: &egui::Context) {
 
 #[cfg(not(target_os = "macos"))]
 fn setup_fonts_with_fontconfig(ctx: &egui::Context) {
-    use rust_fontconfig::{FcFontCache, FcPattern};
-    use std::collections::HashSet;
+    use rust_fontconfig::FcFontCache;
 
     let mut fonts = FontDefinitions::default();
 
