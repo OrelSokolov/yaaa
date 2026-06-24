@@ -38,6 +38,7 @@ fn try_run(renderer: eframe::Renderer, icon: IconData) -> eframe::Result {
             .with_inner_size([400.0, 300.0])
             .with_min_inner_size([300.0, 220.0])
             .with_title("Yet Another AI Agent")
+            .with_app_id("yaaa")
             .with_icon(icon),
         renderer,
         ..Default::default()
