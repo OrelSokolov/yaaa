@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.15] - 2026-06-26
+
+### Changed
+- Reduce forced redraw rate: active window to 2 FPS and inactive window to 1 FPS.
+
 ## [0.4.6] - 2026-06-20
 
 ### Fixed

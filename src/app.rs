@@ -509,9 +509,9 @@ impl eframe::App for App {
             let viewport = ctx.input(|i| i.viewport().clone());
             if viewport.visible().unwrap_or(true) {
                 let delay = if viewport.focused.unwrap_or(true) {
-                    Duration::from_millis(16)
+                    Duration::from_millis(500)
                 } else {
-                    Duration::from_millis(100)
+                    Duration::from_millis(1000)
                 };
                 ctx.request_repaint_after(delay);
             }
