@@ -180,3 +180,14 @@ namespace :install do
     sh "sudo dpkg -i #{deb_file}"
   end
 end
+
+desc 'Build and run the debug executable'
+task :run do
+  puts 'Building debug binary...'
+  sh 'cargo build'
+
+  binary = windows? ? "target/debug/#{PACKAGE_NAME}.exe" : "target/debug/#{PACKAGE_NAME}"
+
+  puts "Running #{binary}..."
+  sh binary
+end
