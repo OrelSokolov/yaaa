@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::constants::*;
+use crate::theme::AppTheme;
 
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct Settings {
@@ -17,6 +18,8 @@ pub struct Settings {
     pub default_shell_cmd: String,
     #[serde(default = "default_agent_cmd")]
     pub default_agent_cmd: String,
+    #[serde(default = "default_theme")]
+    pub theme: AppTheme,
 }
 
 fn default_show_terminal_lines() -> bool {
@@ -41,6 +44,10 @@ fn default_shell_cmd() -> String {
 
 fn default_agent_cmd() -> String {
     DEFAULT_AGENT_CMD.to_string()
+}
+
+fn default_theme() -> AppTheme {
+    AppTheme::default()
 }
 
 impl Settings {

@@ -1,9 +1,14 @@
 use crate::hotkeys::get_hotkeys;
+use crate::theme::{
+    color_picker_button, font_size_slider, opacity_slider, AppFonts, AppTheme,
+};
 
 pub struct WindowManager {
     pub show_about: bool,
     pub show_hotkeys: bool,
     pub show_settings: bool,
+    pub show_theme_settings: bool,
+    pub show_font_settings: bool,
     pub show_rename_group: bool,
     pub show_close_confirmation: bool,
     pub rename_group_id: Option<u64>,
@@ -14,7 +19,13 @@ pub struct WindowManager {
     pub saved_default_agent_cmd: String,
     pub editing_run_as_login_shell: bool,
     pub saved_run_as_login_shell: bool,
+    pub editing_theme: AppTheme,
+    pub saved_theme: AppTheme,
+    pub editing_fonts: AppFonts,
+    pub saved_fonts: AppFonts,
     pub was_settings_open: bool,
+    pub was_theme_settings_open: bool,
+    pub was_font_settings_open: bool,
 }
 
 impl WindowManager {
@@ -22,6 +33,7 @@ impl WindowManager {
         default_shell_cmd: String,
         default_agent_cmd: String,
         run_as_login_shell: bool,
+        theme: AppTheme,
     ) -> Self {
         let editing_default_shell_cmd = default_shell_cmd.clone();
         let editing_default_agent_cmd = default_agent_cmd.clone();
@@ -29,11 +41,17 @@ impl WindowManager {
         let saved_default_agent_cmd = editing_default_agent_cmd.clone();
         let editing_run_as_login_shell = run_as_login_shell;
         let saved_run_as_login_shell = run_as_login_shell;
+        let editing_theme = theme;
+        let saved_theme = editing_theme;
+        let editing_fonts = editing_theme.fonts;
+        let saved_fonts = editing_fonts;
 
         Self {
             show_about: false,
             show_hotkeys: false,
             show_settings: false,
+            show_theme_settings: false,
+            show_font_settings: false,
             show_rename_group: false,
             show_close_confirmation: false,
             rename_group_id: None,
@@ -44,7 +62,13 @@ impl WindowManager {
             saved_default_agent_cmd,
             editing_run_as_login_shell,
             saved_run_as_login_shell,
+            editing_theme,
+            saved_theme,
+            editing_fonts,
+            saved_fonts,
             was_settings_open: false,
+            was_theme_settings_open: false,
+            was_font_settings_open: false,
         }
     }
 
@@ -55,6 +79,8 @@ impl WindowManager {
         self.show_hotkeys_window(ctx);
         self.show_rename_group_window(ctx, &mut actions);
         self.show_settings_window(ctx, &mut actions);
+        self.show_theme_settings_window(ctx, &mut actions);
+        self.show_font_settings_window(ctx, &mut actions);
         self.show_close_confirmation_window(ctx, &mut actions);
 
         actions
@@ -101,7 +127,11 @@ impl WindowManager {
             });
     }
 
-    fn show_rename_group_window(&mut self, ctx: &egui::Context, actions: &mut WindowActions) {
+    fn show_rename_group_window(
+        &mut self,
+        ctx: &egui::Context,
+        actions: &mut WindowActions,
+    ) {
         let mut should_save = false;
         let mut should_close = false;
 
@@ -143,7 +173,11 @@ impl WindowManager {
         }
     }
 
-    fn show_settings_window(&mut self, ctx: &egui::Context, actions: &mut WindowActions) {
+    fn show_settings_window(
+        &mut self,
+        ctx: &egui::Context,
+        actions: &mut WindowActions,
+    ) {
         let mut settings_save = false;
         let mut settings_cancel = false;
 
@@ -173,7 +207,9 @@ impl WindowManager {
 
                     ui.add_space(15.0);
 
-                    ui.checkbox(&mut self.editing_run_as_login_shell, "Run as login shell");
+                    ui.checkbox(&mut self.editing_run_as_login_shell,
+                        "Run as login shell",
+                    );
 
                     ui.add_space(15.0);
 
@@ -212,13 +248,284 @@ impl WindowManager {
         }
     }
 
+    fn show_theme_settings_window(
+        &mut self,
+        ctx: &egui::Context,
+        actions: &mut WindowActions,
+    ) {
+        let mut save = false;
+        let mut cancel = false;
+        let mut restore_defaults = false;
+
+        let window_id = egui::Id::new("theme_settings_window");
+
+        if self.show_theme_settings && !self.was_theme_settings_open {
+            ctx.memory_mut(|m| m.request_focus(window_id));
+        }
+        self.was_theme_settings_open = self.show_theme_settings;
+
+        egui::Window::new("Theme Settings")
+            .id(window_id)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut self.show_theme_settings)
+            .show(ctx, |ui| {
+                egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
+                    ui.heading("Theme Settings");
+                    ui.add_space(10.0);
+
+                    ui.heading("Terminal colors");
+                    ui.add_space(6.0);
+                    color_picker_button(
+                        ui,
+                        "Terminal foreground",
+                        &mut self.editing_theme.terminal_fg,
+                    );
+
+                    ui.add_space(15.0);
+
+                    ui.heading("Background");
+                    ui.label("Used for the app and terminal background.");
+                    ui.add_space(6.0);
+                    color_picker_button(ui, "Background color", &mut self.editing_theme.app_bg);
+                    opacity_slider(
+                        ui,
+                        "Background opacity",
+                        &mut self.editing_theme.app_bg_opacity,
+                    );
+
+                    ui.add_space(15.0);
+
+                    ui.heading("UI colors");
+                    ui.add_space(6.0);
+                    color_picker_button(
+                        ui,
+                        "Sidebar text",
+                        &mut self.editing_theme.panel_text,
+                    );
+                    ui.add_space(4.0);
+                    color_picker_button(
+                        ui,
+                        "Sidebar selected text",
+                        &mut self.editing_theme.panel_text_selected,
+                    );
+                    ui.add_space(4.0);
+                    color_picker_button(
+                        ui,
+                        "Sidebar hover text",
+                        &mut self.editing_theme.panel_text_hover,
+                    );
+                    ui.add_space(4.0);
+                    color_picker_button(ui, "Tab text", &mut self.editing_theme.tab_text);
+                    ui.add_space(4.0);
+                    color_picker_button(
+                        ui,
+                        "Active tab background",
+                        &mut self.editing_theme.tab_active_bg,
+                    );
+
+                    ui.add_space(15.0);
+
+                    ui.label("Preview");
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new("Sidebar text")
+                                .color(self.editing_theme.panel_text),
+                        );
+                        ui.label(
+                            egui::RichText::new("Selected")
+                                .color(self.editing_theme.panel_text_selected),
+                        );
+                        ui.label(
+                            egui::RichText::new("Hover")
+                                .color(self.editing_theme.panel_text_hover),
+                        );
+                        ui.label(
+                            egui::RichText::new("Tab")
+                                .color(self.editing_theme.tab_text),
+                        );
+                    });
+                    ui.horizontal(|ui| {
+                        let preview_bg = self.editing_theme.tab_active_bg;
+                        ui.label(
+                            egui::RichText::new("Active tab")
+                                .color(self.editing_theme.tab_text)
+                                .background_color(preview_bg),
+                        );
+                    });
+
+                    ui.add_space(15.0);
+
+                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                        cancel = true;
+                    }
+
+                    ui.horizontal(|ui| {
+                        if ui.button("Save").clicked()
+                            || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                        {
+                            save = true;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            cancel = true;
+                        }
+                        if ui.button("Restore Defaults").clicked() {
+                            restore_defaults = true;
+                        }
+                    });
+                });
+            });
+
+        if restore_defaults {
+            self.editing_theme = AppTheme::default();
+            // Apply preview immediately so the user sees the defaults.
+            self.editing_theme.apply_to_visuals(ctx);
+        }
+
+        if save {
+            actions.theme = Some(self.editing_theme);
+            self.saved_theme = self.editing_theme;
+            actions.should_save_settings = true;
+            self.show_theme_settings = false;
+        }
+        if cancel {
+            self.editing_theme = self.saved_theme;
+            self.editing_theme.apply_to_visuals(ctx);
+            self.show_theme_settings = false;
+        }
+    }
+
+    fn show_font_settings_window(
+        &mut self,
+        ctx: &egui::Context,
+        actions: &mut WindowActions,
+    ) {
+        let mut save = false;
+        let mut cancel = false;
+        let mut preview = false;
+        let mut restore_defaults = false;
+
+        let window_id = egui::Id::new("font_settings_window");
+
+        if self.show_font_settings && !self.was_font_settings_open {
+            ctx.memory_mut(|m| m.request_focus(window_id));
+        }
+        self.was_font_settings_open = self.show_font_settings;
+
+        egui::Window::new("Font Settings")
+            .id(window_id)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut self.show_font_settings)
+            .show(ctx, |ui| {
+                egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
+                    ui.heading("Font Settings");
+                    ui.add_space(10.0);
+
+                    font_size_slider(
+                        ui,
+                        "UI font size",
+                        &mut self.editing_fonts.ui_font_size,
+                    );
+                    ui.add_space(4.0);
+                    font_size_slider(
+                        ui,
+                        "Group name font size",
+                        &mut self.editing_fonts.group_name_font_size,
+                    );
+                    ui.add_space(4.0);
+                    font_size_slider(
+                        ui,
+                        "Tab font size",
+                        &mut self.editing_fonts.tab_font_size,
+                    );
+                    ui.add_space(4.0);
+                    font_size_slider(
+                        ui,
+                        "Terminal font size",
+                        &mut self.editing_fonts.terminal_font_size,
+                    );
+
+                    ui.add_space(15.0);
+
+                    ui.label("Preview");
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new("UI text")
+                                .size(self.editing_fonts.ui_font_size),
+                        );
+                        ui.label(
+                            egui::RichText::new("Group")
+                                .size(self.editing_fonts.group_name_font_size),
+                        );
+                        ui.label(
+                            egui::RichText::new("Tab")
+                                .size(self.editing_fonts.tab_font_size),
+                        );
+                        ui.label(
+                            egui::RichText::new("Terminal")
+                                .font(egui::FontId::monospace(
+                                    self.editing_fonts.terminal_font_size,
+                                )),
+                        );
+                    });
+
+                    ui.add_space(15.0);
+
+                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                        cancel = true;
+                    }
+
+                    ui.horizontal(|ui| {
+                        if ui.button("Save").clicked()
+                            || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                        {
+                            save = true;
+                        }
+                        if ui.button("Preview").clicked() {
+                            preview = true;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            cancel = true;
+                        }
+                        if ui.button("Restore Defaults").clicked() {
+                            restore_defaults = true;
+                        }
+                    });
+                });
+            });
+
+        if restore_defaults {
+            self.editing_fonts = AppFonts::default();
+            self.editing_fonts.apply(ctx);
+        }
+
+        if preview {
+            self.editing_fonts.apply(ctx);
+        }
+
+        if save {
+            actions.fonts = Some(self.editing_fonts);
+            self.saved_fonts = self.editing_fonts;
+            actions.should_save_settings = true;
+            self.show_font_settings = false;
+        }
+        if cancel {
+            self.editing_fonts = self.saved_fonts;
+            self.saved_fonts.apply(ctx);
+            self.show_font_settings = false;
+        }
+    }
+
     pub fn rename_group(&mut self, group_id: u64, name: String) {
         self.rename_group_id = Some(group_id);
         self.rename_group_name = name;
         self.show_rename_group = true;
     }
 
-    fn show_close_confirmation_window(&mut self, ctx: &egui::Context, actions: &mut WindowActions) {
+    fn show_close_confirmation_window(
+        &mut self,
+        ctx: &egui::Context,
+        actions: &mut WindowActions,
+    ) {
         let mut confirmed = false;
         let mut cancelled = false;
 
@@ -262,6 +569,8 @@ pub struct WindowActions {
     pub default_shell_cmd: Option<String>,
     pub default_agent_cmd: Option<String>,
     pub run_as_login_shell: Option<bool>,
+    pub theme: Option<AppTheme>,
+    pub fonts: Option<AppFonts>,
     pub should_save_groups: bool,
     pub should_save_settings: bool,
     pub close_confirmed: bool,

@@ -136,7 +136,26 @@ fn load_system_font(
     }
 }
 
-/// Get terminal font
-pub fn get_terminal_font() -> FontId {
-    FontId::monospace(14.0)
+/// Try to load a system font by name
+#[cfg(not(target_os = "macos"))]
+fn load_system_font(
+    cache: &rust_fontconfig::FcFontCache,
+    name: &str,
+) -> Option<FontData> {
+    use rust_fontconfig::FcPattern;
+
+    let pattern = FcPattern {
+        name: Some(name.to_string()),
+        ..Default::default()
+    };
+
+    let font_match = cache.query(&pattern, &mut Vec::new())?;
+    let font_source = cache.get_font_by_id(&font_match.id)?;
+
+    match font_source {
+        rust_fontconfig::FontSource::Disk(font_path) => std::fs::read(&font_path.path)
+            .ok()
+            .map(FontData::from_owned),
+        rust_fontconfig::FontSource::Memory(font) => Some(FontData::from_owned(font.bytes.clone())),
+    }
 }

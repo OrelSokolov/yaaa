@@ -1,5 +1,6 @@
 use crate::menu::apply_menu_style;
 use crate::terminal::{TabInfo, TabManager, TerminalBackendExt};
+use crate::theme::AppTheme;
 
 fn copy_to_clipboard(text: &str) {
     if let Ok(mut clipboard) = arboard::Clipboard::new() {
@@ -36,6 +37,7 @@ pub fn show_left_panel(
     tab_manager: &TabManager,
     window_manager: &mut super::windows::WindowManager,
     show_sidebar: bool,
+    theme: &AppTheme,
 ) -> PanelActions {
     let mut actions = PanelActions::default();
 
@@ -50,6 +52,11 @@ pub fn show_left_panel(
     if show_sidebar {
         egui::SidePanel::left("left_panel")
             .default_width(100.0)
+            .frame(egui::Frame {
+                fill: theme.app_bg_with_opacity(),
+                inner_margin: egui::Margin::symmetric(6, 0),
+                ..Default::default()
+            })
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
@@ -57,7 +64,7 @@ pub fn show_left_panel(
                         ui.style_mut().spacing.interact_size = egui::vec2(120.0, 24.0);
                         ui.style_mut()
                             .text_styles
-                            .insert(egui::TextStyle::Body, egui::FontId::proportional(15.0));
+                            .insert(egui::TextStyle::Body, egui::FontId::proportional(theme.fonts.ui_font_size));
                         ui.add_space(8.0);
                         if groups_to_render.is_empty() {
                             let add_project_btn = ui
@@ -84,18 +91,18 @@ pub fn show_left_panel(
 
                                     let text_color = if response.hovered() {
                                         ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
-                                        egui::Color32::LIGHT_BLUE
+                                        theme.panel_text_hover
                                     } else if is_selected {
-                                        ui.visuals().selection.stroke.color
+                                        theme.panel_text_selected
                                     } else {
-                                        ui.visuals().text_color()
+                                        theme.panel_text
                                     };
 
                                     ui.painter().text(
                                         response.rect.center(),
                                         egui::Align2::CENTER_CENTER,
                                         group_name,
-                                        egui::FontId::proportional(18.0),
+                                        egui::FontId::proportional(theme.fonts.group_name_font_size),
                                         text_color,
                                     );
 
@@ -127,6 +134,20 @@ pub fn show_left_panel(
 
                                 ui.horizontal(|ui| {
                                     let width = ui.available_width() * 0.9;
+                                    ui.visuals_mut().widgets.inactive.fg_stroke.color = theme.tab_text;
+                                    ui.visuals_mut().widgets.hovered.fg_stroke.color = theme.tab_text;
+                                    ui.visuals_mut().widgets.active.fg_stroke.color = theme.tab_text;
+                                    ui.visuals_mut().widgets.open.fg_stroke.color = theme.tab_text;
+                                    ui.visuals_mut().widgets.inactive.fg_stroke.width = theme.fonts.tab_font_size * 0.05;
+                                    ui.visuals_mut().widgets.hovered.fg_stroke.width = theme.fonts.tab_font_size * 0.05;
+                                    ui.visuals_mut().widgets.active.fg_stroke.width = theme.fonts.tab_font_size * 0.05;
+                                    ui.visuals_mut().widgets.open.fg_stroke.width = theme.fonts.tab_font_size * 0.05;
+                                    ui.visuals_mut().selection.bg_fill = theme.tab_active_bg;
+                                    ui.visuals_mut().selection.stroke.color = theme.tab_active_bg;
+                                    ui.style_mut().text_styles.insert(
+                                        egui::TextStyle::Button,
+                                        egui::FontId::proportional(theme.fonts.tab_font_size),
+                                    );
                                     let label = egui::Button::selectable(is_active, tab_name)
                                         .min_size(egui::vec2(width, 0.0));
                                     let response = ui
@@ -183,7 +204,11 @@ pub fn show_left_panel(
     actions
 }
 
-pub fn show_search_panel(ctx: &egui::Context, tab_manager: &mut TabManager) {
+pub fn show_search_panel(
+    ctx: &egui::Context,
+    tab_manager: &mut TabManager,
+    theme: &AppTheme,
+) {
     let Some(tab) = tab_manager.get_active() else {
         return;
     };
@@ -205,6 +230,10 @@ pub fn show_search_panel(ctx: &egui::Context, tab_manager: &mut TabManager) {
         .resizable(false)
         .show_separator_line(false)
         .default_height(40.0)
+        .frame(egui::Frame {
+            fill: theme.app_bg_with_opacity(),
+            ..Default::default()
+        })
         .show(ctx, |ui| {
             egui::Frame::NONE
                 .inner_margin(egui::vec2(8.0, 6.0))
@@ -259,8 +288,15 @@ pub fn show_central_panel(
     ctx: &egui::Context,
     tab_manager: &mut TabManager,
     window_manager: &super::windows::WindowManager,
+    theme: &AppTheme,
 ) {
-    egui::CentralPanel::default().show(ctx, |ui| {
+    egui::CentralPanel::default()
+        .frame(egui::Frame {
+            fill: theme.app_bg_with_opacity(),
+            inner_margin: egui::Margin::same(4),
+            ..Default::default()
+        })
+        .show(ctx, |ui| {
         if let Some(tab) = tab_manager.get_active() {
             let content = tab.backend.last_content();
             let is_alternate = content
@@ -299,10 +335,15 @@ pub fn show_central_panel(
                     ui.set_height(viewport_height);
 
                     let should_block_input = tab.just_created;
+                    let terminal_theme = theme.build_terminal_theme();
+                    let terminal_font = theme.terminal_font();
                     let terminal = egui_term::TerminalView::new(ui, &mut tab.backend)
+                        .set_theme(terminal_theme)
+                        .set_font(terminal_font)
                         .set_focus(
                             !window_manager.show_rename_group
                                 && !window_manager.show_settings
+                                && !window_manager.show_theme_settings
                                 && !should_block_input
                                 && !tab.search_active,
                         )
@@ -311,7 +352,7 @@ pub fn show_central_panel(
                     let response = ui.add(terminal);
 
                     response.context_menu(|ui| {
-                        apply_menu_style(ui);
+                        apply_menu_style(ui, theme.fonts.ui_font_size);
 
                         let selected_text = tab.backend.selectable_content();
                         let stripped_text: String = selected_text
