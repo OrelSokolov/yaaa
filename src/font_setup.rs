@@ -6,7 +6,7 @@
 //! no useful fonts (fontconfig is not the native macOS font stack). egui's
 //! built-in default fonts cover the UI perfectly well on their own.
 
-use egui::{FontData, FontDefinitions, FontFamily, FontId};
+use egui::{FontData, FontDefinitions, FontFamily};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -110,30 +110,6 @@ fn get_fallback_fonts(cache: &rust_fontconfig::FcFontCache) -> Vec<String> {
     result.truncate(6);
 
     result
-}
-
-/// Try to load a system font by name
-#[cfg(not(target_os = "macos"))]
-fn load_system_font(
-    cache: &rust_fontconfig::FcFontCache,
-    name: &str,
-) -> Option<FontData> {
-    use rust_fontconfig::FcPattern;
-
-    let pattern = FcPattern {
-        name: Some(name.to_string()),
-        ..Default::default()
-    };
-
-    let font_match = cache.query(&pattern, &mut Vec::new())?;
-    let font_source = cache.get_font_by_id(&font_match.id)?;
-
-    match font_source {
-        rust_fontconfig::FontSource::Disk(font_path) => std::fs::read(&font_path.path)
-            .ok()
-            .map(FontData::from_owned),
-        rust_fontconfig::FontSource::Memory(font) => Some(FontData::from_owned(font.bytes.clone())),
-    }
 }
 
 /// Try to load a system font by name
