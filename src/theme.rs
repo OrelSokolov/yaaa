@@ -207,7 +207,11 @@ pub fn color_picker_button(ui: &mut egui::Ui, label: &str, color: &mut Color32) 
             .layout(egui::Layout::top_down(egui::Align::Min))
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| {
-                ui.set_min_width(200.0);
+                // Make the picker noticeably larger than egui's defaults so it is
+                // easier to hit the exact color.
+                ui.set_min_width(320.0);
+                ui.set_min_height(360.0);
+                ui.spacing_mut().slider_width = 300.0;
                 if egui::color_picker::color_picker_color32(
                     ui,
                     color,
@@ -227,9 +231,9 @@ pub fn opacity_slider(ui: &mut egui::Ui, label: &str, opacity: &mut u8) {
     });
 }
 
-/// A small color preview button with a fixed 1px black border.
+/// A color preview button with a fixed 1px black border.
 fn color_button_with_black_border(ui: &mut egui::Ui, color: Color32) -> egui::Response {
-    let size = ui.spacing().interact_size;
+    let size = egui::vec2(28.0, 28.0);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
 
     if ui.is_rect_visible(rect) {
