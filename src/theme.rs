@@ -211,7 +211,7 @@ pub fn color_picker_button(ui: &mut egui::Ui, label: &str, color: &mut Color32) 
                 if egui::color_picker::color_picker_color32(
                     ui,
                     color,
-                    egui::color_picker::Alpha::Opaque,
+                    egui::color_picker::Alpha::OnlyBlend,
                 ) {
                     // Color was changed by the picker; keep in sync.
                 }
@@ -250,20 +250,37 @@ fn color_button_with_black_border(ui: &mut egui::Ui, color: Color32) -> egui::Re
     response
 }
 
-/// Convert a `Color32` to a `#RRGGBB` hex string.
+/// Convert a `Color32` to a `#RRGGBB` or `#RRGGBBAA` hex string.
 pub fn color_to_hex(color: Color32) -> String {
-    format!("#{:02x}{:02x}{:02x}", color.r(), color.g(), color.b())
+    if color.a() == 255 {
+        format!("#{:02x}{:02x}{:02x}", color.r(), color.g(), color.b())
+    } else {
+        format!(
+            "#{:02x}{:02x}{:02x}{:02x}",
+            color.r(),
+            color.g(),
+            color.b(),
+            color.a()
+        )
+    }
 }
 
-/// Convert a `#RRGGBB` hex string to a `Color32`, returning the fallback on
-/// error.
+/// Convert a `#RRGGBB` or `#RRGGBBAA` hex string to a `Color32`, returning the
+/// fallback on error.
 pub fn color_from_hex(hex: &str, fallback: Color32) -> Color32 {
-    if hex.len() != 7 || !hex.starts_with('#') {
+    let is_solid = hex.len() == 7;
+    let is_transparent = hex.len() == 9;
+    if (!is_solid && !is_transparent) || !hex.starts_with('#') {
         return fallback;
     }
     let parse = |s: &str| u8::from_str_radix(s, 16).ok();
-    match (parse(&hex[1..3]), parse(&hex[3..5]), parse(&hex[5..7])) {
-        (Some(r), Some(g), Some(b)) => Color32::from_rgb(r, g, b),
+    match (
+        parse(&hex[1..3]),
+        parse(&hex[3..5]),
+        parse(&hex[5..7]),
+        if is_transparent { parse(&hex[7..9]) } else { Some(255) },
+    ) {
+        (Some(r), Some(g), Some(b), Some(a)) => Color32::from_rgba_unmultiplied(r, g, b, a),
         _ => fallback,
     }
 }
