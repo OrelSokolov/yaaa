@@ -49,7 +49,6 @@ fn try_run(renderer: eframe::Renderer, icon: IconData, transparent: bool) -> efr
     if transparent {
         viewport = viewport
             .with_transparent(true)
-            .with_fullsize_content_view(true)
             .with_has_shadow(false);
     }
 
