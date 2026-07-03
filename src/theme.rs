@@ -176,9 +176,10 @@ pub fn with_alpha(color: Color32, opacity: u8) -> Color32 {
     color_from_rgba(color.r(), color.g(), color.b(), alpha as u8)
 }
 
-/// Build a `Color32` from RGBA bytes, replacing its alpha channel.
+/// Build a `Color32` from sRGBA bytes, replacing its alpha channel.
+/// The input RGB is unmultiplied; egui's `Color32` stores premultiplied alpha.
 pub fn color_from_rgba(r: u8, g: u8, b: u8, a: u8) -> Color32 {
-    Color32::from_rgba_premultiplied(r, g, b, a)
+    Color32::from_rgba_unmultiplied(r, g, b, a)
 }
 
 /// Render a label, editable hex text field and a color button that opens egui's
