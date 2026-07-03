@@ -61,13 +61,13 @@ impl App {
             command_sender_clone,
             cc,
             settings.default_shell_cmd.clone(),
-            settings.default_agent_cmd.clone(),
+            settings.agents.clone(),
             settings.run_as_login_shell,
         );
 
         let window_manager = WindowManager::new(
             settings.default_shell_cmd.clone(),
-            settings.default_agent_cmd.clone(),
+            settings.agents.clone(),
             settings.run_as_login_shell,
             theme,
         );
@@ -104,7 +104,8 @@ impl App {
             show_sidebar: self.show_sidebar,
             run_as_login_shell: self.window_manager.editing_run_as_login_shell,
             default_shell_cmd: self.window_manager.editing_default_shell_cmd.clone(),
-            default_agent_cmd: self.window_manager.editing_default_agent_cmd.clone(),
+            agents: self.window_manager.editing_agents.clone(),
+            legacy_default_agent_cmd: None,
             theme: self.theme,
         };
         settings.save();
@@ -131,12 +132,12 @@ impl App {
     fn handle_keyboard(
         &mut self,
         ctx: &egui::Context,
-    ) -> (bool, Option<u64>, Option<u64>, Option<u64>) {
+    ) -> (bool, Option<u64>, Option<u64>, Vec<(u64, usize)>) {
         let events = handle_keyboard_events(ctx, self.tab_manager.active_group_id.is_some());
 
         let mut close_tab_id = None;
         let mut add_tab_to_group = None;
-        let mut add_agent_tab_to_group = None;
+        let mut add_agent_tab_to_group = Vec::new();
 
         if events.switch_to_next_tab {
             self.tab_manager.switch_to_next_tab();
@@ -152,9 +153,9 @@ impl App {
             }
         }
 
-        if events.add_agent_tab {
+        if let Some(agent_index) = events.add_agent_tab {
             if let Some(group_id) = self.tab_manager.active_group_id {
-                add_agent_tab_to_group = Some(group_id);
+                add_agent_tab_to_group.push((group_id, agent_index));
             }
         }
 
@@ -224,13 +225,13 @@ impl App {
 
         if let Some(group_id) = actions.add_tab_to_group {
             self.tab_manager
-                .add_tab_to_group(group_id, ctx.clone(), false);
+                .add_tab_to_group(group_id, ctx.clone(), None);
             self.tab_manager.save_groups();
         }
 
-        if let Some(group_id) = actions.add_agent_tab_to_group {
+        for (group_id, agent_index) in actions.add_agent_tab_to_group {
             self.tab_manager
-                .add_tab_to_group(group_id, ctx.clone(), true);
+                .add_tab_to_group(group_id, ctx.clone(), Some(agent_index));
             self.tab_manager.save_groups();
         }
 
@@ -275,8 +276,8 @@ impl App {
             self.tab_manager.set_default_shell_cmd(shell_cmd);
         }
 
-        if let Some(agent_cmd) = actions.default_agent_cmd {
-            self.tab_manager.set_default_agent_cmd(agent_cmd);
+        if let Some(agents) = actions.agents {
+            self.tab_manager.set_agents(agents);
         }
 
         if let Some(run_as_login_shell) = actions.run_as_login_shell {
@@ -420,13 +421,14 @@ impl eframe::App for App {
 
                                 ui.separator();
 
-                                ui.menu_button("🔧 General", |ui| {
-                                    apply_menu_style(ui, self.theme.fonts.ui_font_size);
-                                    if ui.button("💻 Terminal").clicked() {
-                                        self.window_manager.show_settings = true;
-                                        ui.close();
-                                    }
-                                });
+                                if ui.button("💻 Terminal").clicked() {
+                                    self.window_manager.show_settings = true;
+                                    ui.close();
+                                }
+                                if ui.button("💬 Agents").clicked() {
+                                    self.window_manager.show_agents_settings = true;
+                                    ui.close();
+                                }
 
                                 ui.separator();
 
@@ -496,6 +498,7 @@ impl eframe::App for App {
             &self.tab_manager,
             &mut self.window_manager,
             self.show_sidebar,
+            &self.tab_manager.agents,
             &self.theme,
         );
 
@@ -530,13 +533,13 @@ impl eframe::App for App {
 
         if let Some(group_id) = add_tab_to_group {
             self.tab_manager
-                .add_tab_to_group(group_id, ctx.clone(), false);
+                .add_tab_to_group(group_id, ctx.clone(), None);
             self.tab_manager.save_groups();
         }
 
-        if let Some(group_id) = add_agent_tab_to_group {
+        for (group_id, agent_index) in add_agent_tab_to_group {
             self.tab_manager
-                .add_tab_to_group(group_id, ctx.clone(), true);
+                .add_tab_to_group(group_id, ctx.clone(), Some(agent_index));
             self.tab_manager.save_groups();
         }
 

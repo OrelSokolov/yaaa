@@ -6,7 +6,7 @@ pub fn get_hotkeys() -> BTreeMap<&'static str, &'static str> {
     hotkeys.insert("Ctrl + Tab", "Switch to next tab");
     hotkeys.insert("Ctrl + Shift + Tab", "Switch to previous tab");
     hotkeys.insert("Ctrl + Shift + N", "Add new terminal tab");
-    hotkeys.insert("Ctrl + Shift + A", "Add new agent tab");
+    hotkeys.insert("Ctrl + Shift + A", "Add new agent tab (first agent only)");
     hotkeys.insert("Ctrl + Shift + Q", "Close current tab");
     hotkeys.insert("Ctrl + Shift + Page Up", "Scroll terminal one page up");
     hotkeys.insert("Ctrl + Shift + Page Down", "Scroll terminal one page down");
@@ -20,7 +20,7 @@ pub struct KeyboardEvents {
     pub switch_to_next_tab: bool,
     pub switch_to_prev_tab: bool,
     pub add_terminal_tab: bool,
-    pub add_agent_tab: bool,
+    pub add_agent_tab: Option<usize>,
     pub close_tab: bool,
     pub scroll_to_top: bool,
     pub scroll_to_bottom: bool,
@@ -36,7 +36,7 @@ pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> Keybo
         switch_to_next_tab: false,
         switch_to_prev_tab: false,
         add_terminal_tab: false,
-        add_agent_tab: false,
+        add_agent_tab: None,
         close_tab: false,
         scroll_to_top: false,
         scroll_to_bottom: false,
@@ -69,7 +69,7 @@ pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> Keybo
         && input.modifiers.shift
     {
         ctx.input_mut(|i| i.consume_key(i.modifiers, egui::Key::A));
-        events.add_agent_tab = true;
+        events.add_agent_tab = Some(0);
     }
 
     if input.key_pressed(egui::Key::Q) && input.modifiers.ctrl && input.modifiers.shift {

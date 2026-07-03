@@ -1,3 +1,4 @@
+use crate::config::settings::{AgentConfig, MAX_AGENTS};
 use crate::constants::GROUPS_FILE;
 use crate::terminal::tab::Tab;
 use egui_term::PtyEvent;
@@ -8,6 +9,8 @@ use std::{collections::BTreeMap, path::PathBuf, sync::mpsc::Sender};
 pub struct TabInfo {
     pub id: u64,
     pub is_agent: bool,
+    #[serde(default)]
+    pub agent_index: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -45,7 +48,7 @@ pub struct TabManager {
     next_group_id: u64,
     next_tab_id: u64,
     pub default_shell_cmd: String,
-    pub default_agent_cmd: String,
+    pub agents: [AgentConfig; MAX_AGENTS],
     pub run_as_login_shell: bool,
 }
 
@@ -54,7 +57,7 @@ impl TabManager {
         command_sender: Sender<(u64, PtyEvent)>,
         cc: &eframe::CreationContext<'_>,
         default_shell_cmd: String,
-        default_agent_cmd: String,
+        agents: [AgentConfig; MAX_AGENTS],
         run_as_login_shell: bool,
     ) -> Self {
         let mut manager = Self {
@@ -66,7 +69,7 @@ impl TabManager {
             next_group_id: 0,
             next_tab_id: 0,
             default_shell_cmd,
-            default_agent_cmd,
+            agents,
             run_as_login_shell,
         };
 
@@ -77,20 +80,44 @@ impl TabManager {
                 manager.next_group_id = manager.next_group_id.max(group.id + 1);
                 for tab_info in &mut group.tabs {
                     manager.next_tab_id = manager.next_tab_id.max(tab_info.id + 1);
-                    let use_agent =
-                        tab_info.is_agent && Tab::command_exists(&manager.default_agent_cmd);
-                    tab_info.is_agent = use_agent;
-                    let shell_cmd = if use_agent {
-                        &manager.default_agent_cmd
+
+                    let (use_agent, agent_index) = if let Some(idx) = tab_info.agent_index {
+                        manager
+                            .agents
+                            .get(idx)
+                            .map(|a| (a.enabled && !a.cmd.trim().is_empty(), Some(idx)))
+                            .unwrap_or((false, None))
+                    } else if tab_info.is_agent {
+                        // Legacy session: agent tab with no index defaults to agent 0.
+                        let idx = 0usize;
+                        let enabled = manager
+                            .agents
+                            .get(idx)
+                            .map(|a| a.enabled && !a.cmd.trim().is_empty())
+                            .unwrap_or(false);
+                        (enabled, Some(idx))
                     } else {
-                        &manager.default_shell_cmd
+                        (false, None)
                     };
+
+                    tab_info.is_agent = use_agent;
+                    tab_info.agent_index = agent_index;
+
+                    let shell_cmd = if use_agent {
+                        agent_index
+                            .and_then(|idx| manager.agents.get(idx))
+                            .map(|a| a.cmd.clone())
+                            .unwrap_or_default()
+                    } else {
+                        manager.default_shell_cmd.clone()
+                    };
+
                     let tab = Tab::new(
                         cc.egui_ctx.clone(),
                         manager.command_sender.clone(),
                         tab_info.id,
                         Some(group.path.clone()),
-                        shell_cmd,
+                        &shell_cmd,
                         use_agent,
                         !use_agent && manager.run_as_login_shell,
                     );
@@ -114,7 +141,7 @@ impl TabManager {
             manager.groups.insert(group_id, group);
             manager.active_group_id = Some(group_id);
 
-            manager.add_tab_to_group(group_id, cc.egui_ctx.clone(), false);
+            manager.add_tab_to_group(group_id, cc.egui_ctx.clone(), None);
         }
 
         manager
@@ -153,7 +180,11 @@ impl TabManager {
         }
     }
 
-    pub fn add_group_with_path(&mut self, ctx: egui::Context, path: Option<PathBuf>) {
+    pub fn add_group_with_path(
+        &mut self,
+        ctx: egui::Context,
+        path: Option<PathBuf>,
+    ) {
         let group_id = self.next_group_id;
         self.next_group_id += 1;
 
@@ -165,7 +196,7 @@ impl TabManager {
         self.groups.insert(group_id, group);
         self.active_group_id = Some(group_id);
 
-        self.add_tab_to_group(group_id, ctx, false);
+        self.add_tab_to_group(group_id, ctx, None);
     }
 
     pub fn rename_group(&mut self, group_id: u64, new_name: String) {
@@ -174,23 +205,35 @@ impl TabManager {
         }
     }
 
-    pub fn add_tab_to_group(&mut self, group_id: u64, ctx: egui::Context, is_agent: bool) {
+    /// Add a tab to a group.
+    /// `agent_index` is `None` for a terminal tab, or `Some(i)` to open agent `i`.
+    pub fn add_tab_to_group(
+        &mut self,
+        group_id: u64,
+        ctx: egui::Context,
+        agent_index: Option<usize>,
+    ) {
         let tab_id = self.next_tab_id;
         self.next_tab_id += 1;
 
         let group_path = self.groups.get(&group_id).map(|g| g.path.clone());
-        let use_agent = is_agent && Tab::command_exists(&self.default_agent_cmd);
-        let shell_cmd = if use_agent {
-            &self.default_agent_cmd
+
+        let (use_agent, shell_cmd) = if let Some(idx) = agent_index {
+            self.agents
+                .get(idx)
+                .filter(|a| a.enabled && !a.cmd.trim().is_empty())
+                .map(|a| (true, a.cmd.clone()))
+                .unwrap_or((false, self.default_shell_cmd.clone()))
         } else {
-            &self.default_shell_cmd
+            (false, self.default_shell_cmd.clone())
         };
+
         let tab = Tab::new(
             ctx,
             self.command_sender.clone(),
             tab_id,
             group_path,
-            shell_cmd,
+            &shell_cmd,
             use_agent,
             !use_agent && self.run_as_login_shell,
         );
@@ -200,6 +243,7 @@ impl TabManager {
             group.tabs.push(TabInfo {
                 id: tab_id,
                 is_agent: use_agent,
+                agent_index: if use_agent { agent_index } else { None },
             });
         }
 
@@ -327,23 +371,43 @@ impl TabManager {
     }
 
     pub fn get_tab_name(&self, group_id: u64, id: u64) -> String {
-        let is_agent = self.tabs.get(&id).map(|t| t.is_agent).unwrap_or(false);
+        let tab = self.tabs.get(&id);
+        let agent_index = tab.and_then(|t| {
+            if t.is_agent {
+                // Find the stored agent_index for this tab.
+                self.groups.get(&group_id).and_then(|g| {
+                    g.tabs.iter().find(|info| info.id == id).and_then(|info| info.agent_index)
+                })
+            } else {
+                None
+            }
+        });
+
+        if let Some(idx) = agent_index {
+            let agent_name = self
+                .agents
+                .get(idx)
+                .filter(|a| !a.name.trim().is_empty())
+                .map(|a| a.name.clone())
+                .unwrap_or_else(|| format!("Агент {}", idx + 1));
+            if let Some(group) = self.groups.get(&group_id) {
+                for (i, tab_info) in group.tabs.iter().enumerate() {
+                    if tab_info.id == id {
+                        return format!("{}. {} 💬", i + 1, agent_name);
+                    }
+                }
+            }
+            return format!("{}. {} 💬", id + 1, agent_name);
+        }
+
         if let Some(group) = self.groups.get(&group_id) {
             for (i, tab_info) in group.tabs.iter().enumerate() {
                 if tab_info.id == id {
-                    return if is_agent {
-                        format!("{}. Agent 💬", i + 1)
-                    } else {
-                        format!("{}. Terminal", i + 1)
-                    };
+                    return format!("{}. Terminal", i + 1);
                 }
             }
         }
-        if is_agent {
-            format!("{}. ➕ Agent", id + 1)
-        } else {
-            format!("{}. Terminal", id + 1)
-        }
+        format!("{}. Terminal", id + 1)
     }
 
     fn get_tab_mut(&mut self, id: u64) -> Option<&mut Tab> {
@@ -361,8 +425,11 @@ impl TabManager {
         self.default_shell_cmd = shell_cmd;
     }
 
-    pub fn set_default_agent_cmd(&mut self, agent_cmd: String) {
-        self.default_agent_cmd = agent_cmd;
+    pub fn set_agents(
+        &mut self,
+        agents: [AgentConfig; MAX_AGENTS],
+    ) {
+        self.agents = agents;
     }
 
     pub fn set_run_as_login_shell(&mut self, run_as_login_shell: bool) {

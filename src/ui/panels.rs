@@ -1,3 +1,4 @@
+use crate::config::settings::{AgentConfig, MAX_AGENTS};
 use crate::menu::apply_menu_style;
 use crate::terminal::{TabInfo, TabManager, TerminalBackendExt};
 use crate::theme::AppTheme;
@@ -17,7 +18,7 @@ fn paste_from_clipboard() -> Option<String> {
 pub struct PanelActions {
     pub add_group_clicked: bool,
     pub add_tab_to_group: Option<u64>,
-    pub add_agent_tab_to_group: Option<u64>,
+    pub add_agent_tab_to_group: Vec<(u64, usize)>,
     pub group_actions: Vec<(u64, String, Vec<(u64, bool)>)>,
 }
 
@@ -26,7 +27,7 @@ impl Default for PanelActions {
         Self {
             add_group_clicked: false,
             add_tab_to_group: None,
-            add_agent_tab_to_group: None,
+            add_agent_tab_to_group: Vec::new(),
             group_actions: Vec::new(),
         }
     }
@@ -37,6 +38,7 @@ pub fn show_left_panel(
     tab_manager: &TabManager,
     window_manager: &mut super::windows::WindowManager,
     show_sidebar: bool,
+    agents: &[AgentConfig; MAX_AGENTS],
     theme: &AppTheme,
 ) -> PanelActions {
     let mut actions = PanelActions::default();
@@ -184,14 +186,39 @@ pub fn show_left_panel(
                                 if terminal_btn.clicked() {
                                     actions.add_tab_to_group = Some(*group_id);
                                 }
-                                let agent_btn = ui
-                                    .add(
-                                        egui::Button::new("➕ Agent")
-                                            .min_size(egui::vec2(0.0, 16.0)),
-                                    )
-                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-                                if agent_btn.clicked() {
-                                    actions.add_agent_tab_to_group = Some(*group_id);
+
+                                for (idx, agent) in agents.iter().enumerate() {
+                                    if !agent.enabled {
+                                        continue;
+                                    }
+                                    let name = if agent.name.trim().is_empty() {
+                                        format!("Агент {}", idx + 1)
+                                    } else {
+                                        agent.name.clone()
+                                    };
+                                    let has_cmd = !agent.cmd.trim().is_empty();
+                                    let button =
+                                        egui::Button::new(format!("➕ {}", name))
+                                            .min_size(egui::vec2(0.0, 16.0));
+                                    let response = if has_cmd {
+                                        ui.add(button)
+                                    } else {
+                                        ui.add_enabled(false, button)
+                                    };
+                                    let response = response.on_hover_cursor(if has_cmd {
+                                        egui::CursorIcon::PointingHand
+                                    } else {
+                                        egui::CursorIcon::NotAllowed
+                                    });
+                                    if !has_cmd {
+                                        response.on_hover_text(
+                                            "Configure a command for this agent in Agents settings",
+                                        );
+                                    } else if response.clicked() {
+                                        actions
+                                            .add_agent_tab_to_group
+                                            .push((*group_id, idx));
+                                    }
                                 }
                             });
 
@@ -343,7 +370,9 @@ pub fn show_central_panel(
                         .set_focus(
                             !window_manager.show_rename_group
                                 && !window_manager.show_settings
+                                && !window_manager.show_agents_settings
                                 && !window_manager.show_theme_settings
+                                && !window_manager.show_font_settings
                                 && !should_block_input
                                 && !tab.search_active,
                         )

@@ -1,3 +1,4 @@
+use crate::config::settings::{AgentConfig, MAX_AGENTS};
 use crate::hotkeys::get_hotkeys;
 use crate::theme::{
     color_picker_button, font_size_slider, opacity_slider, AppFonts, AppTheme,
@@ -7,6 +8,7 @@ pub struct WindowManager {
     pub show_about: bool,
     pub show_hotkeys: bool,
     pub show_settings: bool,
+    pub show_agents_settings: bool,
     pub show_theme_settings: bool,
     pub show_font_settings: bool,
     pub show_rename_group: bool,
@@ -14,9 +16,9 @@ pub struct WindowManager {
     pub rename_group_id: Option<u64>,
     pub rename_group_name: String,
     pub editing_default_shell_cmd: String,
-    pub editing_default_agent_cmd: String,
     pub saved_default_shell_cmd: String,
-    pub saved_default_agent_cmd: String,
+    pub editing_agents: [AgentConfig; MAX_AGENTS],
+    pub saved_agents: [AgentConfig; MAX_AGENTS],
     pub editing_run_as_login_shell: bool,
     pub saved_run_as_login_shell: bool,
     pub editing_theme: AppTheme,
@@ -24,6 +26,7 @@ pub struct WindowManager {
     pub editing_fonts: AppFonts,
     pub saved_fonts: AppFonts,
     pub was_settings_open: bool,
+    pub was_agents_settings_open: bool,
     pub was_theme_settings_open: bool,
     pub was_font_settings_open: bool,
 }
@@ -31,14 +34,14 @@ pub struct WindowManager {
 impl WindowManager {
     pub fn new(
         default_shell_cmd: String,
-        default_agent_cmd: String,
+        agents: [AgentConfig; MAX_AGENTS],
         run_as_login_shell: bool,
         theme: AppTheme,
     ) -> Self {
         let editing_default_shell_cmd = default_shell_cmd.clone();
-        let editing_default_agent_cmd = default_agent_cmd.clone();
         let saved_default_shell_cmd = editing_default_shell_cmd.clone();
-        let saved_default_agent_cmd = editing_default_agent_cmd.clone();
+        let editing_agents = agents.clone();
+        let saved_agents = editing_agents.clone();
         let editing_run_as_login_shell = run_as_login_shell;
         let saved_run_as_login_shell = run_as_login_shell;
         let editing_theme = theme;
@@ -50,6 +53,7 @@ impl WindowManager {
             show_about: false,
             show_hotkeys: false,
             show_settings: false,
+            show_agents_settings: false,
             show_theme_settings: false,
             show_font_settings: false,
             show_rename_group: false,
@@ -57,9 +61,9 @@ impl WindowManager {
             rename_group_id: None,
             rename_group_name: String::new(),
             editing_default_shell_cmd,
-            editing_default_agent_cmd,
             saved_default_shell_cmd,
-            saved_default_agent_cmd,
+            editing_agents,
+            saved_agents,
             editing_run_as_login_shell,
             saved_run_as_login_shell,
             editing_theme,
@@ -67,6 +71,7 @@ impl WindowManager {
             editing_fonts,
             saved_fonts,
             was_settings_open: false,
+            was_agents_settings_open: false,
             was_theme_settings_open: false,
             was_font_settings_open: false,
         }
@@ -79,6 +84,7 @@ impl WindowManager {
         self.show_hotkeys_window(ctx);
         self.show_rename_group_window(ctx, &mut actions);
         self.show_settings_window(ctx, &mut actions);
+        self.show_agents_settings_window(ctx, &mut actions);
         self.show_theme_settings_window(ctx, &mut actions);
         self.show_font_settings_window(ctx, &mut actions);
         self.show_close_confirmation_window(ctx, &mut actions);
@@ -200,11 +206,6 @@ impl WindowManager {
                     ui.label("Default shell cmd:");
                     ui.text_edit_singleline(&mut self.editing_default_shell_cmd);
 
-                    ui.add_space(5.0);
-
-                    ui.label("Default agent cmd:");
-                    ui.text_edit_singleline(&mut self.editing_default_agent_cmd);
-
                     ui.add_space(15.0);
 
                     ui.checkbox(&mut self.editing_run_as_login_shell,
@@ -232,19 +233,103 @@ impl WindowManager {
 
         if settings_save {
             actions.default_shell_cmd = Some(self.editing_default_shell_cmd.clone());
-            actions.default_agent_cmd = Some(self.editing_default_agent_cmd.clone());
             actions.run_as_login_shell = Some(self.editing_run_as_login_shell);
             self.saved_default_shell_cmd = self.editing_default_shell_cmd.clone();
-            self.saved_default_agent_cmd = self.editing_default_agent_cmd.clone();
             self.saved_run_as_login_shell = self.editing_run_as_login_shell;
             actions.should_save_settings = true;
             self.show_settings = false;
         }
         if settings_cancel {
             self.editing_default_shell_cmd = self.saved_default_shell_cmd.clone();
-            self.editing_default_agent_cmd = self.saved_default_agent_cmd.clone();
             self.editing_run_as_login_shell = self.saved_run_as_login_shell;
             self.show_settings = false;
+        }
+    }
+
+    fn show_agents_settings_window(
+        &mut self,
+        ctx: &egui::Context,
+        actions: &mut WindowActions,
+    ) {
+        let mut save = false;
+        let mut cancel = false;
+
+        let window_id = egui::Id::new("agents_settings_window");
+
+        if self.show_agents_settings && !self.was_agents_settings_open {
+            ctx.memory_mut(|m| m.request_focus(window_id));
+        }
+        self.was_agents_settings_open = self.show_agents_settings;
+
+        egui::Window::new("Agents")
+            .id(window_id)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut self.show_agents_settings)
+            .show(ctx, |ui| {
+                egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
+                    ui.heading("Agent Settings");
+                    ui.label("Configure up to 4 agents. Enabled agents appear in the sidebar.");
+                    ui.add_space(10.0);
+
+                    egui::ScrollArea::vertical()
+                        .id_salt("agents_settings_scroll")
+                        .max_height(420.0)
+                        .show(ui, |ui| {
+                            for (i, agent) in self.editing_agents.iter_mut().enumerate() {
+                                ui.push_id(i, |ui| {
+                                    ui.group(|ui| {
+                                        ui.label(format!("Agent {}", i + 1));
+
+                                        ui.horizontal(|ui| {
+                                            ui.checkbox(&mut agent.enabled,
+                                                "Enabled",
+                                            );
+                                        });
+
+                                        ui.horizontal(|ui| {
+                                            ui.label("Name:");
+                                            ui.text_edit_singleline(
+                                                &mut agent.name,
+                                            );
+                                        });
+                                        ui.horizontal(|ui| {
+                                            ui.label("Command:");
+                                            ui.text_edit_singleline(
+                                                &mut agent.cmd,
+                                            );
+                                        });
+                                    });
+                                });
+                                ui.add_space(8.0);
+                            }
+                        });
+
+                    ui.add_space(10.0);
+
+                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                        cancel = true;
+                    }
+
+                    ui.horizontal(|ui| {
+                        if ui.button("Save").clicked() {
+                            save = true;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            cancel = true;
+                        }
+                    });
+                });
+            });
+
+        if save {
+            actions.agents = Some(self.editing_agents.clone());
+            self.saved_agents = self.editing_agents.clone();
+            actions.should_save_settings = true;
+            self.show_agents_settings = false;
+        }
+        if cancel {
+            self.editing_agents = self.saved_agents.clone();
+            self.show_agents_settings = false;
         }
     }
 
@@ -567,7 +652,7 @@ impl WindowManager {
 pub struct WindowActions {
     pub rename_group: Option<(u64, String)>,
     pub default_shell_cmd: Option<String>,
-    pub default_agent_cmd: Option<String>,
+    pub agents: Option<[AgentConfig; MAX_AGENTS]>,
     pub run_as_login_shell: Option<bool>,
     pub theme: Option<AppTheme>,
     pub fonts: Option<AppFonts>,
