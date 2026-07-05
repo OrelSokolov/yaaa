@@ -269,6 +269,10 @@ impl WindowManager {
                 egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
                     ui.heading("Agent Settings");
                     ui.label("Configure up to 4 agents. Enabled agents appear in the sidebar.");
+                    ui.label(
+                        egui::RichText::new("Absolute path required")
+                            .color(egui::Color32::from_rgb(100, 150, 255)),
+                    );
                     ui.add_space(10.0);
 
                     egui::ScrollArea::vertical()
