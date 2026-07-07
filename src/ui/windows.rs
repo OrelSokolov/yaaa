@@ -461,6 +461,18 @@ impl WindowManager {
 
                     ui.add_space(8.0);
 
+                    egui::CollapsingHeader::new("Tab buttons")
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            button_style_group(
+                                ui,
+                                &mut self.editing_theme.tab_button,
+                                "Tab",
+                            );
+                        });
+
+                    ui.add_space(8.0);
+
                     egui::CollapsingHeader::new("Close buttons")
                         .default_open(false)
                         .show(ui, |ui| {

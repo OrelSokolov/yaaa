@@ -35,6 +35,9 @@ pub struct AppTheme {
     /// Font sizes used throughout the app.
     #[serde(default)]
     pub fonts: AppFonts,
+    /// Style for the sidebar tab buttons.
+    #[serde(default)]
+    pub tab_button: AppButtonStyle,
     /// Style for the tab close buttons (✖).
     #[serde(default)]
     pub close_button: AppButtonStyle,
@@ -62,11 +65,24 @@ impl Default for AppTheme {
             tab_active_bg: Color32::from_rgb(0x02, 0x5f, 0x99),
             terminal_fg: DEFAULT_TERMINAL_FG,
             fonts: AppFonts::default(),
+            tab_button: AppButtonStyle {
+                bg: Color32::TRANSPARENT,
+                text: default_tab_text_color(),
+                border: Color32::TRANSPARENT,
+                bg_hover: Color32::from_rgb(0x33, 0x33, 0x33),
+                text_hover: default_tab_text_color(),
+                border_hover: Color32::TRANSPARENT,
+            },
             close_button: AppButtonStyle::default(),
             agent_button: AppButtonStyle::default(),
             terminal_button: AppButtonStyle::default(),
         }
     }
+}
+
+/// Default font color for sidebar tab buttons (matches `tab_text`).
+fn default_tab_text_color() -> Color32 {
+    Color32::from_rgb(0xd8, 0xd8, 0xd8)
 }
 
 impl AppTheme {

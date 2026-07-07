@@ -136,16 +136,9 @@ pub fn show_left_panel(
 
                                 ui.horizontal(|ui| {
                                     let width = ui.available_width() * 0.9;
-                                    ui.visuals_mut().widgets.inactive.fg_stroke.color = theme.tab_text;
-                                    ui.visuals_mut().widgets.hovered.fg_stroke.color = theme.tab_text;
-                                    ui.visuals_mut().widgets.active.fg_stroke.color = theme.tab_text;
-                                    ui.visuals_mut().widgets.open.fg_stroke.color = theme.tab_text;
-                                    ui.visuals_mut().widgets.inactive.fg_stroke.width = theme.fonts.tab_font_size * 0.05;
-                                    ui.visuals_mut().widgets.hovered.fg_stroke.width = theme.fonts.tab_font_size * 0.05;
-                                    ui.visuals_mut().widgets.active.fg_stroke.width = theme.fonts.tab_font_size * 0.05;
-                                    ui.visuals_mut().widgets.open.fg_stroke.width = theme.fonts.tab_font_size * 0.05;
+                                    theme.tab_button.apply_to_visuals(ui);
                                     ui.visuals_mut().selection.bg_fill = theme.tab_active_bg;
-                                    ui.visuals_mut().selection.stroke.color = theme.tab_active_bg;
+                                    ui.visuals_mut().selection.stroke.color = theme.tab_button.text;
                                     ui.style_mut().text_styles.insert(
                                         egui::TextStyle::Button,
                                         egui::FontId::proportional(theme.fonts.tab_font_size),
