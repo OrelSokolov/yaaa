@@ -514,15 +514,26 @@ impl WindowManager {
                     }
 
                     ui.horizontal(|ui| {
-                        if ui.button("Save").clicked()
+                        if ui
+                            .add(egui::Button::new("Save").min_size(egui::vec2(80.0, 32.0)))
+                            .clicked()
                             || ui.input(|i| i.key_pressed(egui::Key::Enter))
                         {
                             save = true;
                         }
-                        if ui.button("Cancel").clicked() {
+                        if ui
+                            .add(egui::Button::new("Cancel").min_size(egui::vec2(80.0, 32.0)))
+                            .clicked()
+                        {
                             cancel = true;
                         }
-                        if ui.button("Restore Defaults").clicked() {
+                        if ui
+                            .add(
+                                egui::Button::new("Restore Defaults")
+                                    .min_size(egui::vec2(80.0, 32.0)),
+                            )
+                            .clicked()
+                        {
                             restore_defaults = true;
                         }
                     });

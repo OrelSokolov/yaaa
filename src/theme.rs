@@ -364,7 +364,7 @@ fn color_button_with_black_border(ui: &mut egui::Ui, color: Color32) -> egui::Re
         );
     }
 
-    response
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// Convert a `Color32` to a `#RRGGBB` or `#RRGGBBAA` hex string.
