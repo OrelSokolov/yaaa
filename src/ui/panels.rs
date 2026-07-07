@@ -163,6 +163,7 @@ pub fn show_left_panel(
                                         ));
                                     }
 
+                                    theme.close_button.apply_to_visuals(ui);
                                     let close_btn = ui
                                         .add(egui::Button::new("✖").min_size(egui::vec2(30.0, 0.0)))
                                         .on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -177,10 +178,11 @@ pub fn show_left_panel(
                             }
 
                             ui.horizontal(|ui| {
+                                theme.terminal_button.apply_to_visuals(ui);
                                 let terminal_btn = ui
                                     .add(
                                         egui::Button::new("➕ Terminal")
-                                            .min_size(egui::vec2(0.0, 16.0)),
+                                            .min_size(egui::vec2(0.0, 28.0)),
                                     )
                                     .on_hover_cursor(egui::CursorIcon::PointingHand);
                                 if terminal_btn.clicked() {
@@ -197,9 +199,10 @@ pub fn show_left_panel(
                                         agent.name.clone()
                                     };
                                     let has_cmd = !agent.cmd.trim().is_empty();
+                                    theme.agent_button.apply_to_visuals(ui);
                                     let button =
                                         egui::Button::new(format!("➕ {}", name))
-                                            .min_size(egui::vec2(0.0, 16.0));
+                                            .min_size(egui::vec2(0.0, 28.0));
                                     let response = if has_cmd {
                                         ui.add(button)
                                     } else {

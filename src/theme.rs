@@ -35,6 +35,15 @@ pub struct AppTheme {
     /// Font sizes used throughout the app.
     #[serde(default)]
     pub fonts: AppFonts,
+    /// Style for the tab close buttons (✖).
+    #[serde(default)]
+    pub close_button: AppButtonStyle,
+    /// Style for the agent action buttons (➕ Agent).
+    #[serde(default)]
+    pub agent_button: AppButtonStyle,
+    /// Style for the terminal action buttons (➕ Terminal).
+    #[serde(default)]
+    pub terminal_button: AppButtonStyle,
 }
 
 fn default_opacity() -> u8 {
@@ -53,6 +62,9 @@ impl Default for AppTheme {
             tab_active_bg: Color32::from_rgb(0x02, 0x5f, 0x99),
             terminal_fg: DEFAULT_TERMINAL_FG,
             fonts: AppFonts::default(),
+            close_button: AppButtonStyle::default(),
+            agent_button: AppButtonStyle::default(),
+            terminal_button: AppButtonStyle::default(),
         }
     }
 }
@@ -168,6 +180,91 @@ pub fn font_size_slider(ui: &mut egui::Ui, label: &str, size: &mut f32) {
         ui.label(label);
         ui.add(egui::Slider::new(size, 10.0..=30.0).text("px"));
     });
+}
+
+/// Colors for one class of action buttons (close, agent or terminal).
+/// Each class keeps its own instance so they can be styled independently.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct AppButtonStyle {
+    /// Button background fill (inactive state).
+    #[serde(with = "color32_hex")]
+    pub bg: Color32,
+    /// Button label (font) color (inactive state).
+    #[serde(with = "color32_hex")]
+    pub text: Color32,
+    /// Button border color (inactive state).
+    #[serde(with = "color32_hex", default = "default_button_border")]
+    pub border: Color32,
+    /// Button background fill on hover.
+    #[serde(with = "color32_hex", default = "default_button_bg_hover")]
+    pub bg_hover: Color32,
+    /// Button label (font) color on hover.
+    #[serde(with = "color32_hex", default = "default_button_text_hover")]
+    pub text_hover: Color32,
+    /// Button border color on hover.
+    #[serde(with = "color32_hex", default = "default_button_border_hover")]
+    pub border_hover: Color32,
+}
+
+fn default_button_bg_hover() -> Color32 {
+    Color32::from_rgb(0x44, 0x44, 0x44)
+}
+
+fn default_button_text_hover() -> Color32 {
+    Color32::from_rgb(0xff, 0xff, 0xff)
+}
+
+/// Border matches the app/body background so it is invisible by default.
+fn default_button_border() -> Color32 {
+    Color32::from_rgb(0x1d, 0x1d, 0x1d)
+}
+
+fn default_button_border_hover() -> Color32 {
+    default_button_border()
+}
+
+impl Default for AppButtonStyle {
+    fn default() -> Self {
+        Self {
+            bg: Color32::from_rgb(0x33, 0x33, 0x33),
+            text: Color32::from_rgb(0xd8, 0xd8, 0xd8),
+            border: default_button_border(),
+            bg_hover: default_button_bg_hover(),
+            text_hover: default_button_text_hover(),
+            border_hover: default_button_border_hover(),
+        }
+    }
+}
+
+impl AppButtonStyle {
+    /// Apply this style to the widget visuals of `ui` so the next button(s)
+    /// added use it for inactive, hovered, active and open states. Going through
+    /// visuals (instead of `Button::fill`/`Button::stroke`) keeps egui's native
+    /// hover feedback and expansion intact.
+    pub fn apply_to_visuals(self, ui: &mut egui::Ui) {
+        let v = ui.visuals_mut();
+        // The app sets `override_text_color` globally (for panel text), and egui
+        // uses it in preference to the per-state `fg_stroke.color` for button
+        // labels. Clear it here so the button text follows `fg_stroke.color`
+        // (i.e. the per-state font color configured below), including hover.
+        v.override_text_color = None;
+
+        v.widgets.inactive.weak_bg_fill = self.bg;
+        v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, self.text);
+        v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, self.border);
+
+        v.widgets.hovered.weak_bg_fill = self.bg_hover;
+        v.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, self.text_hover);
+        v.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, self.border_hover);
+
+        v.widgets.active.weak_bg_fill = self.bg_hover;
+        v.widgets.active.fg_stroke = egui::Stroke::new(1.0, self.text_hover);
+        v.widgets.active.bg_stroke = egui::Stroke::new(1.0, self.border_hover);
+
+        v.widgets.open.weak_bg_fill = self.bg_hover;
+        v.widgets.open.fg_stroke = egui::Stroke::new(1.0, self.text_hover);
+        v.widgets.open.bg_stroke = egui::Stroke::new(1.0, self.border_hover);
+    }
 }
 
 /// Apply a 0-100 opacity percentage to a `Color32`.
