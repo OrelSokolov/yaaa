@@ -251,7 +251,6 @@ pub fn show_search_panel(
 
     egui::TopBottomPanel::bottom("search_panel")
         .resizable(false)
-        .show_separator_line(false)
         .default_height(40.0)
         .frame(egui::Frame {
             fill: theme.app_bg_with_opacity(),
