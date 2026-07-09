@@ -273,6 +273,16 @@ pub fn show_search_panel(
 
                         if query_response.changed() {
                             tab.backend.search_set_query(&tab.search_query);
+                            if let Some(point) = tab.backend.search_current_match() {
+                                tab.backend.scroll_to_point(point);
+                            }
+                        }
+
+                        if search_no_match && !tab.search_query.is_empty() {
+                            ui.label(
+                                egui::RichText::new("Not found")
+                                    .color(ui.visuals().text_color()),
+                            );
                         }
 
                         if ui
@@ -298,10 +308,9 @@ pub fn show_search_panel(
                             .clicked()
                         {
                             tab.backend.search_set_query(&tab.search_query);
-                        }
-
-                        if search_no_match && !tab.search_query.is_empty() {
-                            ui.label(egui::RichText::new("No matches"));
+                            if let Some(point) = tab.backend.search_current_match() {
+                                tab.backend.scroll_to_point(point);
+                            }
                         }
                     });
                 });
