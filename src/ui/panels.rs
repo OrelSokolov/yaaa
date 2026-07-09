@@ -303,8 +303,12 @@ pub fn show_search_panel(
                         }
 
                         if ui
-                            .add(egui::Button::new("Search").min_size(egui::vec2(0.0, 24.0)))
-                            .clicked()
+                            .scope(|ui| {
+                                ui.style_mut().spacing.button_padding =
+                                    egui::vec2(12.0, 1.0);
+                                ui.button("Search").clicked()
+                            })
+                            .inner
                         {
                             tab.backend.search_set_query(&tab.search_query);
                             if let Some(point) = tab.backend.search_current_match() {
