@@ -265,9 +265,10 @@ pub fn show_search_panel(
                         let query_response = ui.add(
                             egui::TextEdit::singleline(&mut tab.search_query)
                                 .id(search_textedit_id)
-                                .desired_width(150.0)
+                                .desired_width(250.0)
                                 .hint_text("Search...")
-                                .min_size(egui::vec2(0.0, 20.0)),
+                                .min_size(egui::vec2(0.0, 24.0))
+                                .margin(egui::vec2(4.0, 2.0)),
                         );
 
                         if query_response.changed() {
