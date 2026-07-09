@@ -1200,7 +1200,7 @@ dependencies = [
 [[package]]
 name = "egui_term"
 version = "0.1.0"
-source = "git+https://github.com/OrelSokolov/egui_term.git?rev=34de807e449a536c90db223c0dae9d109a6b1f08#34de807e449a536c90db223c0dae9d109a6b1f08"
+source = "git+https://github.com/OrelSokolov/egui_term.git?rev=d5b4002a4b789e0a213da30485dbbc8121512368#d5b4002a4b789e0a213da30485dbbc8121512368"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
