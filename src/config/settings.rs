@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 use crate::constants::*;
 use crate::theme::AppTheme;
@@ -107,16 +106,8 @@ fn default_theme() -> AppTheme {
 }
 
 impl Settings {
-    pub fn get_config_dir() -> Option<PathBuf> {
-        dirs::config_dir().map(|mut path| {
-            path.push("yaaa");
-            let _ = std::fs::create_dir_all(&path);
-            path
-        })
-    }
-
     pub fn load() -> Self {
-        let mut settings = if let Some(config_dir) = Self::get_config_dir() {
+        let mut settings = if let Some(config_dir) = super::config_dir() {
             let settings_file = config_dir.join(SETTINGS_FILE);
             if settings_file.exists() {
                 if let Ok(content) = std::fs::read_to_string(&settings_file) {
@@ -146,7 +137,7 @@ impl Settings {
     }
 
     pub fn save(&self) {
-        if let Some(config_dir) = Self::get_config_dir() {
+        if let Some(config_dir) = super::config_dir() {
             let settings_file = config_dir.join(SETTINGS_FILE);
             if let Ok(settings_json) = serde_json::to_string_pretty(self) {
                 let _ = std::fs::write(&settings_file, settings_json);

@@ -151,16 +151,8 @@ impl TabManager {
         manager
     }
 
-    fn get_groups_dir() -> Option<PathBuf> {
-        dirs::config_dir().map(|mut path| {
-            path.push("yaaa");
-            let _ = std::fs::create_dir_all(&path);
-            path
-        })
-    }
-
     fn load_groups(&mut self) -> Option<Vec<TabGroup>> {
-        if let Some(config_dir) = Self::get_groups_dir() {
+        if let Some(config_dir) = crate::config::config_dir() {
             let groups_file = config_dir.join(GROUPS_FILE);
             if groups_file.exists() {
                 if let Ok(content) = std::fs::read_to_string(&groups_file) {
@@ -174,7 +166,7 @@ impl TabManager {
     }
 
     pub fn save_groups(&self) {
-        if let Some(config_dir) = Self::get_groups_dir() {
+        if let Some(config_dir) = crate::config::config_dir() {
             let groups_file = config_dir.join(GROUPS_FILE);
             if let Ok(groups) =
                 serde_json::to_string_pretty(&self.groups.values().collect::<Vec<_>>())
