@@ -391,6 +391,14 @@ impl WindowManager {
                                 "Background opacity",
                                 &mut self.editing_theme.app_bg_opacity,
                             );
+                            ui.add_space(4.0);
+                            ui.checkbox(&mut self.editing_theme.background_blur, "Background blur")
+                                .on_hover_text(
+                                    "Blur the desktop behind the window (frosted glass). \
+                                     Lower the opacity above to reveal the blur. \
+                                     On Linux this is honored by KWin/Hyprland; on GNOME the \
+                                     window stays just transparent.",
+                                );
                         });
 
                     ui.add_space(8.0);

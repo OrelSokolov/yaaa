@@ -14,6 +14,10 @@ pub struct AppTheme {
     /// Opacity of the application/terminal background, from 0 to 100.
     #[serde(default = "default_opacity")]
     pub app_bg_opacity: u8,
+    /// Whether to blur the desktop behind the transparent window (frosted glass).
+    /// Implies a transparent window even when `app_bg_opacity` is 100.
+    #[serde(default)]
+    pub background_blur: bool,
     /// Text color used in the sidebar for group/tab names.
     #[serde(with = "color32_hex")]
     pub panel_text: Color32,
@@ -58,6 +62,7 @@ impl Default for AppTheme {
         Self {
             app_bg: Color32::from_rgb(0x1d, 0x1d, 0x1d),
             app_bg_opacity: 100,
+            background_blur: false,
             panel_text: Color32::from_rgb(0xce, 0xce, 0xce),
             panel_text_selected: Color32::from_rgb(0xff, 0xa8, 0x00),
             panel_text_hover: Color32::from_rgb(0xe0, 0x9c, 0x00),
@@ -89,6 +94,13 @@ impl AppTheme {
     /// Return the effective application background color with opacity applied.
     pub fn app_bg_with_opacity(&self) -> Color32 {
         with_alpha(self.app_bg, self.app_bg_opacity)
+    }
+
+    /// Whether the window must be rendered with a transparent framebuffer.
+    /// True when the background is semi-transparent or when blur is enabled
+    /// (blur requires a transparent window to show the compositor backdrop).
+    pub fn wants_transparency(&self) -> bool {
+        self.app_bg_opacity < 100 || self.background_blur
     }
 
     /// Apply UI colors to the current egui visuals. This gives an immediate

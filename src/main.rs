@@ -4,6 +4,7 @@
 use egui::IconData;
 
 mod app;
+mod backdrop;
 mod config;
 mod constants;
 mod font_setup;

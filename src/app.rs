@@ -1,3 +1,4 @@
+use crate::backdrop::Backdrop;
 use crate::config::{RecentProjects, Settings};
 use crate::hotkeys::handle_keyboard_events;
 use crate::menu::apply_menu_style;
@@ -23,6 +24,7 @@ pub struct App {
     pub show_sidebar: bool,
     theme: AppTheme,
     transparent: bool,
+    backdrop: Backdrop,
     cached_terminal_theme: egui_term::TerminalTheme,
     cached_terminal_font: egui_term::TerminalFont,
 }
@@ -75,7 +77,8 @@ impl App {
         );
 
         let recent_projects = RecentProjects::load();
-        let transparent = theme.app_bg_opacity < 100;
+        let transparent = theme.wants_transparency();
+        let backdrop = Backdrop::new(theme.background_blur);
         let cached_terminal_theme = theme.build_terminal_theme();
         let cached_terminal_font = theme.terminal_font();
 
@@ -91,16 +94,18 @@ impl App {
             show_sidebar: settings.show_sidebar,
             theme,
             transparent,
+            backdrop,
             cached_terminal_theme,
             cached_terminal_font,
         }
     }
 
-    /// Returns true if the theme background opacity is below 100%, meaning the
-    /// window should be rendered with a transparent framebuffer.
+    /// Returns true if the theme background opacity is below 100% or blur is
+    /// enabled, meaning the window should be rendered with a transparent
+    /// framebuffer.
     pub fn is_transparent_theme() -> bool {
         let settings = Settings::load();
-        settings.theme.app_bg_opacity < 100
+        settings.theme.wants_transparency()
     }
 
     fn save_settings(&self) {
@@ -297,7 +302,8 @@ impl App {
 
         if let Some(theme) = actions.theme {
             self.theme = theme;
-            self.transparent = self.theme.app_bg_opacity < 100;
+            self.transparent = self.theme.wants_transparency();
+            self.backdrop.set_enabled(self.theme.background_blur);
             self.rebuild_terminal_cache();
             setup_visuals(&self.egui_ctx, &self.theme);
             self.theme.fonts.apply(&self.egui_ctx);
@@ -324,12 +330,16 @@ impl eframe::App for App {
         color.to_normalized_gamma_f32()
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx();
         if ctx.input(|i| i.viewport().close_requested()) {
             self.window_manager.show_close_confirmation = true;
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
+
+        // Apply/clear the compositor background blur when the state changes.
+        let backdrop_tint = self.theme.app_bg_with_opacity();
+        self.backdrop.sync(frame, backdrop_tint);
 
         // Keep the live preview in sync while the theme settings window is open.
         if self.window_manager.show_theme_settings {
