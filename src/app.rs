@@ -25,6 +25,9 @@ pub struct App {
     transparent: bool,
     cached_terminal_theme: egui_term::TerminalTheme,
     cached_terminal_font: egui_term::TerminalFont,
+    /// When the theme settings window is open, this holds the live-preview theme
+    /// so that `clear_color` can reflect opacity changes immediately.
+    preview_theme: Option<AppTheme>,
 }
 
 fn setup_visuals(ctx: &egui::Context, theme: &AppTheme) {
@@ -93,11 +96,13 @@ impl App {
             transparent,
             cached_terminal_theme,
             cached_terminal_font,
+            preview_theme: None,
         }
     }
 
     /// Returns true if the theme background opacity is below 100%, meaning the
     /// window should be rendered with a transparent framebuffer.
+    #[allow(dead_code)]
     pub fn is_transparent_theme() -> bool {
         let settings = Settings::load();
         settings.theme.app_bg_opacity < 100
@@ -273,6 +278,10 @@ impl App {
         self.cached_terminal_font = self.theme.terminal_font();
     }
 
+    fn effective_theme(&self) -> &AppTheme {
+        self.preview_theme.as_ref().unwrap_or(&self.theme)
+    }
+
     fn handle_window_actions(&mut self, actions: WindowActions) {
         if let Some((group_id, name)) = actions.rename_group {
             self.tab_manager.rename_group(group_id, name);
@@ -298,11 +307,12 @@ impl App {
         if let Some(theme) = actions.theme {
             self.theme = theme;
             self.transparent = self.theme.app_bg_opacity < 100;
+            self.preview_theme = None;
             self.rebuild_terminal_cache();
             setup_visuals(&self.egui_ctx, &self.theme);
             self.theme.fonts.apply(&self.egui_ctx);
-            self.egui_ctx
-                .send_viewport_cmd(egui::ViewportCommand::Transparent(self.transparent));
+            self.egui_ctx.request_repaint();
+            self.window_manager.last_applied_opacity = self.theme.app_bg_opacity;
         }
 
         if let Some(fonts) = actions.fonts {
@@ -319,9 +329,19 @@ impl App {
 
 impl eframe::App for App {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        let color = self.theme.app_bg_with_opacity();
-        log::debug!("clear_color: {:?}", color.to_normalized_gamma_f32());
-        color.to_normalized_gamma_f32()
+        let color = self
+            .preview_theme
+            .unwrap_or(self.theme)
+            .app_bg_with_opacity();
+        let a = color.a() as f32 / 255.0;
+        // Return straight (unmultiplied) alpha so the compositor blends the
+        // background color correctly against the desktop.
+        [
+            color.r() as f32 / 255.0,
+            color.g() as f32 / 255.0,
+            color.b() as f32 / 255.0,
+            a,
+        ]
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -336,11 +356,23 @@ impl eframe::App for App {
             self.window_manager
                 .editing_theme
                 .apply_to_visuals(ctx);
+            let opacity = self.window_manager.editing_theme.app_bg_opacity;
+            if opacity != self.window_manager.last_applied_opacity {
+                self.window_manager.last_applied_opacity = opacity;
+                self.preview_theme = Some(self.window_manager.editing_theme);
+                let transparent = opacity < 100;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Transparent(transparent));
+                ctx.request_repaint();
+            }
+        } else {
+            self.preview_theme = None;
         }
+
+        let theme = *self.effective_theme();
 
         egui::TopBottomPanel::top("menu_bar")
             .frame(egui::Frame {
-                fill: self.theme.app_bg_with_opacity(),
+                fill: theme.app_bg_with_opacity(),
                 ..Default::default()
             })
             .show(ctx, |ui| {
@@ -350,19 +382,19 @@ impl eframe::App for App {
                     ui.horizontal(|ui| {
                         ui.style_mut()
                             .text_styles
-                            .insert(egui::TextStyle::Button, egui::FontId::proportional(self.theme.fonts.ui_font_size));
+                            .insert(egui::TextStyle::Button, egui::FontId::proportional(theme.fonts.ui_font_size));
                         ui.style_mut()
                             .text_styles
-                            .insert(egui::TextStyle::Body, egui::FontId::proportional(self.theme.fonts.ui_font_size));
+                            .insert(egui::TextStyle::Body, egui::FontId::proportional(theme.fonts.ui_font_size));
 
                         egui::MenuBar::new().ui(ui, |ui| {
                             ui.style_mut().spacing.button_padding = egui::vec2(6.0, 2.0);
                             ui.style_mut()
                                 .text_styles
-                                .insert(egui::TextStyle::Button, egui::FontId::proportional(self.theme.fonts.ui_font_size));
+                                .insert(egui::TextStyle::Button, egui::FontId::proportional(theme.fonts.ui_font_size));
 
                             ui.menu_button("Yet Another AI Agent", |ui| {
-                                apply_menu_style(ui, self.theme.fonts.ui_font_size);
+                                apply_menu_style(ui, theme.fonts.ui_font_size);
 
                                 if ui.button("ℹ About").clicked() {
                                     self.window_manager.show_about = true;
@@ -370,7 +402,7 @@ impl eframe::App for App {
                                 }
                             });
                             ui.menu_button("Projects", |ui| {
-                                apply_menu_style(ui, self.theme.fonts.ui_font_size);
+                                apply_menu_style(ui, theme.fonts.ui_font_size);
 
                                 if ui.button("➕ Add project").clicked() {
                                     if let Some(path) = rfd::FileDialog::new().pick_folder() {
@@ -420,7 +452,7 @@ impl eframe::App for App {
                                 }
                             });
                             ui.menu_button("Settings", |ui| {
-                                apply_menu_style(ui, self.theme.fonts.ui_font_size);
+                                apply_menu_style(ui, theme.fonts.ui_font_size);
 
                                 if ui.button("🎨 Theme").clicked() {
                                     self.window_manager.show_theme_settings = true;
@@ -446,7 +478,7 @@ impl eframe::App for App {
                                 ui.separator();
 
                                 ui.menu_button("🐛 Debug", |ui| {
-                                    apply_menu_style(ui, self.theme.fonts.ui_font_size);
+                                    apply_menu_style(ui, theme.fonts.ui_font_size);
 
                                     if ui
                                         .button(if self.show_terminal_lines {
@@ -473,7 +505,7 @@ impl eframe::App for App {
                                 });
                             });
                             ui.menu_button("Help", |ui| {
-                                apply_menu_style(ui, self.theme.fonts.ui_font_size);
+                                apply_menu_style(ui, theme.fonts.ui_font_size);
                                 if ui.button("⌘ Hotkeys").clicked() {
                                     self.window_manager.show_hotkeys = true;
                                     ui.close();
@@ -512,7 +544,7 @@ impl eframe::App for App {
             &mut self.window_manager,
             self.show_sidebar,
             &self.tab_manager.agents,
-            &self.theme,
+            &theme,
         );
 
         show_debug_panel(
@@ -520,10 +552,10 @@ impl eframe::App for App {
             self.show_fps,
             self.show_terminal_lines,
             &mut self.tab_manager,
-            &self.theme,
+            &theme,
         );
 
-        show_search_panel(ctx, &mut self.tab_manager, &self.theme);
+        show_search_panel(ctx, &mut self.tab_manager, &theme);
 
         let (_close_tab, close_tab_id, add_tab_to_group, add_agent_tab_to_group) =
             self.handle_keyboard(ctx);
@@ -560,7 +592,7 @@ impl eframe::App for App {
             ctx,
             &mut self.tab_manager,
             &self.window_manager,
-            &self.theme,
+            &theme,
             &self.cached_terminal_theme,
             &self.cached_terminal_font,
         );

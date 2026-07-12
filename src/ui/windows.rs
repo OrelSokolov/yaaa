@@ -30,6 +30,9 @@ pub struct WindowManager {
     pub was_agents_settings_open: bool,
     pub was_theme_settings_open: bool,
     pub was_font_settings_open: bool,
+    /// Tracks the last applied opacity so we can toggle viewport transparency
+    /// on the fly while the theme settings window is open.
+    pub last_applied_opacity: u8,
 }
 
 impl WindowManager {
@@ -75,6 +78,7 @@ impl WindowManager {
             was_agents_settings_open: false,
             was_theme_settings_open: false,
             was_font_settings_open: false,
+            last_applied_opacity: editing_theme.app_bg_opacity,
         }
     }
 
