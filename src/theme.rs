@@ -267,19 +267,31 @@ impl AppButtonStyle {
 
         v.widgets.inactive.weak_bg_fill = self.bg;
         v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, self.text);
-        v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, self.border);
+        v.widgets.inactive.bg_stroke = stroke_for(self.border);
 
         v.widgets.hovered.weak_bg_fill = self.bg_hover;
         v.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, self.text_hover);
-        v.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, self.border_hover);
+        v.widgets.hovered.bg_stroke = stroke_for(self.border_hover);
 
         v.widgets.active.weak_bg_fill = self.bg_hover;
         v.widgets.active.fg_stroke = egui::Stroke::new(1.0, self.text_hover);
-        v.widgets.active.bg_stroke = egui::Stroke::new(1.0, self.border_hover);
+        v.widgets.active.bg_stroke = stroke_for(self.border_hover);
 
         v.widgets.open.weak_bg_fill = self.bg_hover;
         v.widgets.open.fg_stroke = egui::Stroke::new(1.0, self.text_hover);
-        v.widgets.open.bg_stroke = egui::Stroke::new(1.0, self.border_hover);
+        v.widgets.open.bg_stroke = stroke_for(self.border_hover);
+    }
+}
+
+/// Return a 1-pixel stroke for a visible color, or no stroke at all for a fully
+/// transparent one. This keeps transparent borders from eating into the button's
+/// inner padding, which is what made sidebar tabs shorter after theming was
+/// introduced.
+fn stroke_for(color: egui::Color32) -> egui::Stroke {
+    if color.a() == 0 {
+        egui::Stroke::NONE
+    } else {
+        egui::Stroke::new(1.0, color)
     }
 }
 

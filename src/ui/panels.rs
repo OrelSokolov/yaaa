@@ -139,10 +139,15 @@ pub fn show_left_panel(
                                         egui::FontId::proportional(theme.fonts.tab_font_size),
                                     );
                                     let label = egui::Button::selectable(is_active, tab_name)
-                                        .min_size(egui::vec2(width, 0.0));
+                                        .min_size(egui::vec2(width, 30.0));
+                                    // Add extra vertical padding inside the tab button so the
+                                    // tabs feel roomier and easier to hit.
+                                    let old_padding = ui.style().spacing.button_padding;
+                                    ui.style_mut().spacing.button_padding = egui::vec2(4.0, 4.0);
                                     let response = ui
                                         .add(label)
                                         .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                    ui.style_mut().spacing.button_padding = old_padding;
                                     if response.clicked() {
                                         actions.group_actions.push((
                                             *group_id,
