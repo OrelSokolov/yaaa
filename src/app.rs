@@ -27,6 +27,7 @@ pub struct App {
     /// When the theme settings window is open, this holds the live-preview theme
     /// so that `clear_color` can reflect opacity changes immediately.
     preview_theme: Option<AppTheme>,
+    exit_confirmed: bool,
 }
 
 fn setup_visuals(ctx: &egui::Context, theme: &AppTheme) {
@@ -94,6 +95,7 @@ impl App {
             cached_terminal_theme,
             cached_terminal_font,
             preview_theme: None,
+            exit_confirmed: false,
         }
     }
 
@@ -335,6 +337,9 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         if ctx.input(|i| i.viewport().close_requested()) {
+            if self.exit_confirmed {
+                return;
+            }
             self.window_manager.show_close_confirmation = true;
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
@@ -555,7 +560,8 @@ impl eframe::App for App {
 
         if window_actions.close_confirmed {
             self.tab_manager.clear();
-            std::process::exit(0);
+            self.exit_confirmed = true;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
 
         self.handle_window_actions(window_actions);
