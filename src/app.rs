@@ -345,7 +345,7 @@ impl eframe::App for App {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let ctx = ui.ctx();
+        let ctx = ui.ctx().clone();
         if ctx.input(|i| i.viewport().close_requested()) {
             self.window_manager.show_close_confirmation = true;
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -355,7 +355,7 @@ impl eframe::App for App {
         if self.window_manager.show_theme_settings {
             self.window_manager
                 .editing_theme
-                .apply_to_visuals(ctx);
+                .apply_to_visuals(&ctx);
             let opacity = self.window_manager.editing_theme.app_bg_opacity;
             if opacity != self.window_manager.last_applied_opacity {
                 self.window_manager.last_applied_opacity = opacity;
@@ -370,12 +370,12 @@ impl eframe::App for App {
 
         let theme = *self.effective_theme();
 
-        egui::TopBottomPanel::top("menu_bar")
+        egui::Panel::top("menu_bar")
             .frame(egui::Frame {
                 fill: theme.app_bg_with_opacity(),
                 ..Default::default()
             })
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 ui.add_space(4.0);
                 ui.vertical(|ui| {
                     ui.add_space(2.0);
@@ -536,10 +536,10 @@ impl eframe::App for App {
                 });
             });
 
-        let window_actions = self.window_manager.show(ctx);
+        let window_actions = self.window_manager.show(&ctx);
 
         let panel_actions = show_left_panel(
-            ctx,
+            ui,
             &self.tab_manager,
             &mut self.window_manager,
             self.show_sidebar,
@@ -548,21 +548,21 @@ impl eframe::App for App {
         );
 
         show_debug_panel(
-            ctx,
+            ui,
             self.show_fps,
             self.show_terminal_lines,
             &mut self.tab_manager,
             &theme,
         );
 
-        show_search_panel(ctx, &mut self.tab_manager, &theme);
+        show_search_panel(ui, &mut self.tab_manager, &theme);
 
         let (_close_tab, close_tab_id, add_tab_to_group, add_agent_tab_to_group) =
-            self.handle_keyboard(ctx);
+            self.handle_keyboard(&ctx);
 
         self.handle_command_events();
 
-        self.handle_panel_actions(ctx, panel_actions);
+        self.handle_panel_actions(&ctx, panel_actions);
 
         if window_actions.close_confirmed {
             self.tab_manager.clear();
@@ -589,7 +589,7 @@ impl eframe::App for App {
         }
 
         show_central_panel(
-            ctx,
+            ui,
             &mut self.tab_manager,
             &self.window_manager,
             &theme,

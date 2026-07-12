@@ -34,7 +34,7 @@ impl Default for PanelActions {
 }
 
 pub fn show_left_panel(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     tab_manager: &TabManager,
     window_manager: &mut super::windows::WindowManager,
     show_sidebar: bool,
@@ -47,14 +47,14 @@ pub fn show_left_panel(
     let active_tab_id = tab_manager.active_tab_id;
 
     if show_sidebar {
-        egui::SidePanel::left("left_panel")
-            .default_width(100.0)
+        egui::Panel::left("left_panel")
+            .default_size(100.0)
             .frame(egui::Frame {
                 fill: theme.app_bg_with_opacity(),
                 inner_margin: egui::Margin::symmetric(6, 0),
                 ..Default::default()
             })
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
@@ -228,7 +228,7 @@ pub fn show_left_panel(
 }
 
 pub fn show_search_panel(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     tab_manager: &mut TabManager,
     theme: &AppTheme,
 ) {
@@ -245,18 +245,18 @@ pub fn show_search_panel(
     let search_textedit_id = egui::Id::new("search_input").with(backend_id);
 
     if tab.search_just_opened {
-        ctx.memory_mut(|m| m.request_focus(search_textedit_id));
+        ui.ctx().memory_mut(|m| m.request_focus(search_textedit_id));
         tab.search_just_opened = false;
     }
 
-    egui::TopBottomPanel::bottom("search_panel")
+    egui::Panel::bottom("search_panel")
         .resizable(false)
-        .default_height(40.0)
+        .default_size(40.0)
         .frame(egui::Frame {
             fill: theme.app_bg_with_opacity(),
             ..Default::default()
         })
-        .show(ctx, |ui| {
+        .show_inside(ui, |ui| {
             egui::Frame::NONE
                 .inner_margin(egui::vec2(8.0, 6.0))
                 .show(ui, |ui| {
@@ -321,7 +321,7 @@ pub fn show_search_panel(
 }
 
 pub fn show_central_panel(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     tab_manager: &mut TabManager,
     window_manager: &super::windows::WindowManager,
     theme: &AppTheme,
@@ -334,7 +334,7 @@ pub fn show_central_panel(
             inner_margin: egui::Margin::same(4),
             ..Default::default()
         })
-        .show(ctx, |ui| {
+        .show_inside(ui, |ui| {
         if let Some(tab) = tab_manager.get_active() {
             let content = tab.backend.last_content();
             let is_alternate = content

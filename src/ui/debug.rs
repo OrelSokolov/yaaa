@@ -2,7 +2,7 @@ use crate::terminal::tab::TerminalBackendExt;
 use crate::theme::AppTheme;
 
 pub fn show_debug_panel(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     show_fps: bool,
     show_terminal_lines: bool,
     tab_manager: &mut crate::terminal::TabManager,
@@ -12,12 +12,12 @@ pub fn show_debug_panel(
         return;
     }
 
-    egui::TopBottomPanel::bottom("debug_panel")
+    egui::Panel::bottom("debug_panel")
         .frame(egui::Frame {
             fill: theme.app_bg_with_opacity(),
             ..Default::default()
         })
-        .show(ctx, |ui| {
+        .show_inside(ui, |ui| {
         ui.horizontal(|ui| {
             if show_terminal_lines {
                 if let Some(tab) = tab_manager.get_active() {
@@ -60,7 +60,7 @@ pub fn show_debug_panel(
                 }
 
                 if show_fps {
-                    let fps = ctx.input(|i| 1.0 / i.stable_dt);
+                    let fps = ui.ctx().input(|i| 1.0 / i.stable_dt);
                     debug_parts.push(format!("FPS: {:.1}", fps));
                 }
 
