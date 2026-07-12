@@ -165,13 +165,12 @@ impl WindowManager {
             });
 
         if should_save {
-            actions.rename_group = Some((
-                self.rename_group_id.unwrap(),
-                self.rename_group_name.clone(),
-            ));
-            self.show_rename_group = false;
-            self.rename_group_id = None;
-            actions.should_save_groups = true;
+            if let Some(id) = self.rename_group_id {
+                actions.rename_group = Some((id, self.rename_group_name.clone()));
+                self.show_rename_group = false;
+                self.rename_group_id = None;
+                actions.should_save_groups = true;
+            }
         }
         if should_close {
             self.show_rename_group = false;
