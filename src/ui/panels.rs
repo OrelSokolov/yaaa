@@ -387,15 +387,20 @@ pub fn show_central_panel(
                     response.context_menu(|ui| {
                         apply_menu_style(ui, theme.fonts.ui_font_size);
 
-                        let selected_text = tab.backend.selectable_content();
-                        let stripped_text: String = selected_text
-                            .split('\n')
-                            .map(|line| line.trim_end())
-                            .collect::<Vec<_>>()
-                            .join("\n");
+                        let has_selection = tab
+                            .backend
+                            .last_content()
+                            .selectable_range
+                            .is_some();
 
-                        if !stripped_text.is_empty() {
+                        if has_selection {
                             if ui.button("📋 Copy").clicked() {
+                                let selected_text = tab.backend.selectable_content();
+                                let stripped_text: String = selected_text
+                                    .split('\n')
+                                    .map(|line| line.trim_end())
+                                    .collect::<Vec<_>>()
+                                    .join("\n");
                                 copy_to_clipboard(&stripped_text);
                                 ui.close();
                             }
