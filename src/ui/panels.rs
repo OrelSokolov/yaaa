@@ -325,6 +325,8 @@ pub fn show_central_panel(
     tab_manager: &mut TabManager,
     window_manager: &super::windows::WindowManager,
     theme: &AppTheme,
+    terminal_theme: &egui_term::TerminalTheme,
+    terminal_font: &egui_term::TerminalFont,
 ) {
     egui::CentralPanel::default()
         .frame(egui::Frame {
@@ -371,11 +373,9 @@ pub fn show_central_panel(
                     ui.set_height(viewport_height);
 
                     let should_block_input = tab.just_created;
-                    let terminal_theme = theme.build_terminal_theme();
-                    let terminal_font = theme.terminal_font();
                     let terminal = egui_term::TerminalView::new(ui, &mut tab.backend)
-                        .set_theme(terminal_theme)
-                        .set_font(terminal_font)
+                        .set_theme(terminal_theme.clone())
+                        .set_font(terminal_font.clone())
                         .set_focus(
                             !window_manager.show_rename_group
                                 && !window_manager.show_settings

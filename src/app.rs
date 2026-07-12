@@ -23,6 +23,8 @@ pub struct App {
     pub show_sidebar: bool,
     theme: AppTheme,
     transparent: bool,
+    cached_terminal_theme: egui_term::TerminalTheme,
+    cached_terminal_font: egui_term::TerminalFont,
 }
 
 fn setup_visuals(ctx: &egui::Context, theme: &AppTheme) {
@@ -74,6 +76,8 @@ impl App {
 
         let recent_projects = RecentProjects::load();
         let transparent = theme.app_bg_opacity < 100;
+        let cached_terminal_theme = theme.build_terminal_theme();
+        let cached_terminal_font = theme.terminal_font();
 
         Self {
             _command_sender: command_sender,
@@ -87,6 +91,8 @@ impl App {
             show_sidebar: settings.show_sidebar,
             theme,
             transparent,
+            cached_terminal_theme,
+            cached_terminal_font,
         }
     }
 
@@ -262,6 +268,11 @@ impl App {
         }
     }
 
+    fn rebuild_terminal_cache(&mut self) {
+        self.cached_terminal_theme = self.theme.build_terminal_theme();
+        self.cached_terminal_font = self.theme.terminal_font();
+    }
+
     fn handle_window_actions(&mut self, actions: WindowActions) {
         if let Some((group_id, name)) = actions.rename_group {
             self.tab_manager.rename_group(group_id, name);
@@ -286,7 +297,8 @@ impl App {
 
         if let Some(theme) = actions.theme {
             self.theme = theme;
-            self.transparent = theme.app_bg_opacity < 100;
+            self.transparent = self.theme.app_bg_opacity < 100;
+            self.rebuild_terminal_cache();
             setup_visuals(&self.egui_ctx, &self.theme);
             self.theme.fonts.apply(&self.egui_ctx);
             self.egui_ctx
@@ -295,6 +307,7 @@ impl App {
 
         if let Some(fonts) = actions.fonts {
             self.theme.fonts = fonts;
+            self.rebuild_terminal_cache();
             self.theme.fonts.apply(&self.egui_ctx);
         }
 
@@ -548,6 +561,8 @@ impl eframe::App for App {
             &mut self.tab_manager,
             &self.window_manager,
             &self.theme,
+            &self.cached_terminal_theme,
+            &self.cached_terminal_font,
         );
 
         // The terminal backend updates its state on a background PTY thread, but
