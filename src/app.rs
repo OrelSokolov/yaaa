@@ -22,7 +22,6 @@ pub struct App {
     pub show_fps: bool,
     pub show_sidebar: bool,
     theme: AppTheme,
-    transparent: bool,
     cached_terminal_theme: egui_term::TerminalTheme,
     cached_terminal_font: egui_term::TerminalFont,
     /// When the theme settings window is open, this holds the live-preview theme
@@ -78,7 +77,6 @@ impl App {
         );
 
         let recent_projects = RecentProjects::load();
-        let transparent = theme.app_bg_opacity < 100;
         let cached_terminal_theme = theme.build_terminal_theme();
         let cached_terminal_font = theme.terminal_font();
 
@@ -93,19 +91,10 @@ impl App {
             show_fps: settings.show_fps,
             show_sidebar: settings.show_sidebar,
             theme,
-            transparent,
             cached_terminal_theme,
             cached_terminal_font,
             preview_theme: None,
         }
-    }
-
-    /// Returns true if the theme background opacity is below 100%, meaning the
-    /// window should be rendered with a transparent framebuffer.
-    #[allow(dead_code)]
-    pub fn is_transparent_theme() -> bool {
-        let settings = Settings::load();
-        settings.theme.app_bg_opacity < 100
     }
 
     fn save_settings(&self) {
@@ -143,7 +132,7 @@ impl App {
     fn handle_keyboard(
         &mut self,
         ctx: &egui::Context,
-    ) -> (bool, Option<u64>, Option<u64>, Vec<(u64, usize)>) {
+    ) -> (Option<u64>, Option<u64>, Vec<(u64, usize)>) {
         let events = handle_keyboard_events(ctx, self.tab_manager.active_group_id.is_some());
 
         let mut close_tab_id = None;
@@ -212,7 +201,6 @@ impl App {
         }
 
         (
-            events.close_tab,
             close_tab_id,
             add_tab_to_group,
             add_agent_tab_to_group,
@@ -307,7 +295,6 @@ impl App {
 
         if let Some(theme) = actions.theme {
             self.theme = theme;
-            self.transparent = self.theme.app_bg_opacity < 100;
             self.preview_theme = None;
             self.rebuild_terminal_cache();
             setup_visuals(&self.egui_ctx, &self.theme);
@@ -559,7 +546,7 @@ impl eframe::App for App {
 
         show_search_panel(ui, &mut self.tab_manager, &theme);
 
-        let (_close_tab, close_tab_id, add_tab_to_group, add_agent_tab_to_group) =
+        let (close_tab_id, add_tab_to_group, add_agent_tab_to_group) =
             self.handle_keyboard(&ctx);
 
         self.handle_command_events();
