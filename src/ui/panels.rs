@@ -1,6 +1,6 @@
 use crate::config::settings::{AgentConfig, MAX_AGENTS};
 use crate::menu::apply_menu_style;
-use crate::terminal::{TabInfo, TabManager, TerminalBackendExt};
+use crate::terminal::{TabManager, TerminalBackendExt};
 use crate::theme::AppTheme;
 
 fn copy_to_clipboard(text: &str) {
@@ -45,11 +45,6 @@ pub fn show_left_panel(
 
     let active_group_id = tab_manager.active_group_id;
     let active_tab_id = tab_manager.active_tab_id;
-    let groups_to_render: Vec<(u64, String, Vec<TabInfo>)> = tab_manager
-        .groups
-        .iter()
-        .map(|(id, g)| (*id, g.name.clone(), g.tabs.clone()))
-        .collect();
 
     if show_sidebar {
         egui::SidePanel::left("left_panel")
@@ -68,7 +63,7 @@ pub fn show_left_panel(
                             .text_styles
                             .insert(egui::TextStyle::Body, egui::FontId::proportional(theme.fonts.ui_font_size));
                         ui.add_space(8.0);
-                        if groups_to_render.is_empty() {
+                        if tab_manager.groups.is_empty() {
                             let add_project_btn = ui
                                 .button("➕ Add project")
                                 .on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -82,7 +77,7 @@ pub fn show_left_panel(
 
                         ui.separator();
 
-                        for (group_id, group_name, tabs) in &groups_to_render {
+                        for (group_id, group) in &tab_manager.groups {
                             let is_selected = active_group_id == Some(*group_id);
 
                             ui.horizontal(|ui| {
@@ -103,17 +98,17 @@ pub fn show_left_panel(
                                     ui.painter().text(
                                         response.rect.center(),
                                         egui::Align2::CENTER_CENTER,
-                                        group_name,
+                                        &group.name,
                                         egui::FontId::proportional(theme.fonts.group_name_font_size),
                                         text_color,
                                     );
 
                                     if response.clicked() {
-                                        window_manager.rename_group(*group_id, group_name.clone());
+                                        window_manager.rename_group(*group_id, group.name.clone());
                                     }
                                 });
 
-                                if tabs.is_empty()
+                                if group.tabs.is_empty()
                                     && ui
                                         .small_button("×")
                                         .on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -129,7 +124,7 @@ pub fn show_left_panel(
 
                             ui.add_space(10.0);
 
-                            for tab_info in tabs {
+                            for tab_info in &group.tabs {
                                 let tab_id = tab_info.id;
                                 let tab_name = tab_manager.get_tab_name(*group_id, tab_id);
                                 let is_active = active_tab_id == Some(tab_id);
