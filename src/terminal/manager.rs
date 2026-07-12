@@ -11,6 +11,8 @@ pub struct TabInfo {
     pub is_agent: bool,
     #[serde(default)]
     pub agent_index: Option<usize>,
+    #[serde(default)]
+    pub display_name: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -129,6 +131,8 @@ impl TabManager {
                 manager.active_group_id = Some(*first_group.0);
                 manager.active_tab_id = first_group.1.tabs.first().map(|t| t.id);
             }
+
+            manager.refresh_all_display_names();
         }
 
         let current_dir_exists_in_groups = manager.groups.values().any(|g| g.path == current_dir);
@@ -240,8 +244,11 @@ impl TabManager {
                 id: tab_id,
                 is_agent: use_agent,
                 agent_index: if use_agent { agent_index } else { None },
+                display_name: String::new(),
             });
         }
+
+        self.refresh_display_names(group_id);
 
         self.active_group_id = Some(group_id);
         self.active_tab_id = Some(tab_id);
@@ -268,6 +275,7 @@ impl TabManager {
 
     pub fn remove(&mut self, id: u64) {
         let mut group_id_to_remove = None;
+        let mut affected_group_id = None;
         let mut group_tabs = None;
 
         for (group_id, group) in &mut self.groups {
@@ -278,6 +286,8 @@ impl TabManager {
 
                 if group.tabs.is_empty() {
                     group_id_to_remove = Some(*group_id);
+                } else {
+                    affected_group_id = Some(*group_id);
                 }
                 break;
             }
@@ -286,6 +296,10 @@ impl TabManager {
         if let Some(group_id) = group_id_to_remove {
             self.remove_group(group_id);
             return;
+        }
+
+        if let Some(group_id) = affected_group_id {
+            self.refresh_display_names(group_id);
         }
 
         if self.active_tab_id == Some(id) {
@@ -366,47 +380,44 @@ impl TabManager {
         }
     }
 
-    pub fn get_tab_name(&self, group_id: u64, id: u64) -> String {
-        let tab = self.tabs.get(&id);
-        let agent_index = tab.and_then(|t| {
-            if t.is_agent {
-                // Find the stored agent_index for this tab.
-                self.groups.get(&group_id).and_then(|g| {
-                    g.tabs
-                        .iter()
-                        .find(|info| info.id == id)
-                        .and_then(|info| info.agent_index)
-                })
-            } else {
-                None
-            }
-        });
-
-        if let Some(idx) = agent_index {
+    fn format_tab_name(&self, tab_info: &TabInfo, index: usize) -> String {
+        if let Some(idx) = tab_info.agent_index {
             let agent_name = self
                 .agents
                 .get(idx)
                 .filter(|a| !a.name.trim().is_empty())
                 .map(|a| a.name.clone())
                 .unwrap_or_else(|| format!("Агент {}", idx + 1));
-            if let Some(group) = self.groups.get(&group_id) {
-                for (i, tab_info) in group.tabs.iter().enumerate() {
-                    if tab_info.id == id {
-                        return format!("{}. {} 💬", i + 1, agent_name);
-                    }
-                }
-            }
-            return format!("{}. {} 💬", id + 1, agent_name);
+            format!("{}. {} 💬", index + 1, agent_name)
+        } else {
+            format!("{}. Terminal", index + 1)
         }
+    }
 
-        if let Some(group) = self.groups.get(&group_id) {
-            for (i, tab_info) in group.tabs.iter().enumerate() {
-                if tab_info.id == id {
-                    return format!("{}. Terminal", i + 1);
-                }
+    fn refresh_display_names(&mut self, group_id: u64) {
+        let names: Vec<String> = if let Some(group) = self.groups.get(&group_id) {
+            group
+                .tabs
+                .iter()
+                .enumerate()
+                .map(|(i, tab_info)| self.format_tab_name(tab_info, i))
+                .collect()
+        } else {
+            return;
+        };
+
+        if let Some(group) = self.groups.get_mut(&group_id) {
+            for (tab_info, name) in group.tabs.iter_mut().zip(names) {
+                tab_info.display_name = name;
             }
         }
-        format!("{}. Terminal", id + 1)
+    }
+
+    fn refresh_all_display_names(&mut self) {
+        let group_ids: Vec<u64> = self.groups.keys().copied().collect();
+        for group_id in group_ids {
+            self.refresh_display_names(group_id);
+        }
     }
 
     fn get_tab_mut(&mut self, id: u64) -> Option<&mut Tab> {
@@ -426,6 +437,7 @@ impl TabManager {
 
     pub fn set_agents(&mut self, agents: [AgentConfig; MAX_AGENTS]) {
         self.agents = agents;
+        self.refresh_all_display_names();
     }
 
     pub fn set_run_as_login_shell(&mut self, run_as_login_shell: bool) {

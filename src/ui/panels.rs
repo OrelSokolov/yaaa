@@ -129,7 +129,7 @@ pub fn show_left_panel(
 
                             for tab_info in &group.tabs {
                                 let tab_id = tab_info.id;
-                                let tab_name = tab_manager.get_tab_name(*group_id, tab_id);
+                                let tab_name = tab_info.display_name.clone();
                                 let is_active = active_tab_id == Some(tab_id);
 
                                 ui.horizontal(|ui| {
