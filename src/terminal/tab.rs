@@ -9,7 +9,7 @@ pub trait TerminalBackendExt {
 
 impl TerminalBackendExt for TerminalBackend {
     fn total_lines(&self) -> usize {
-        self.last_content().grid.total_lines()
+        self.last_content().total_lines
     }
 
     fn screen_lines(&self) -> usize {
@@ -68,7 +68,7 @@ impl Tab {
     pub fn command_exists(cmd: &str) -> bool {
         // Extract just the program name (first word) from the command
         let program = cmd.split_whitespace().next().unwrap_or(cmd);
-        
+
         #[cfg(unix)]
         {
             use std::process::Command;
@@ -109,23 +109,14 @@ impl Tab {
                 }
             }
             candidates.extend(
-                [
-                    "/bin/zsh",
-                    "/bin/bash",
-                    "/usr/bin/zsh",
-                    "/usr/bin/bash",
-                ]
-                .iter()
-                .map(|s| s.to_string()),
+                ["/bin/zsh", "/bin/bash", "/usr/bin/zsh", "/usr/bin/bash"]
+                    .iter()
+                    .map(|s| s.to_string()),
             );
         }
         #[cfg(windows)]
         {
-            candidates.extend(
-                ["cmd.exe", "powershell.exe"]
-                    .iter()
-                    .map(|s| s.to_string()),
-            );
+            candidates.extend(["cmd.exe", "powershell.exe"].iter().map(|s| s.to_string()));
         }
 
         // Deduplicate while preserving order.
@@ -166,7 +157,9 @@ impl Tab {
 
         // For agents the first candidate is the configured agent command and may
         // include arguments. For regular shells the candidate is just the shell path.
-        let first = candidates.next().unwrap_or_else(|| Self::resolve_shell("", false));
+        let first = candidates
+            .next()
+            .unwrap_or_else(|| Self::resolve_shell("", false));
         let mut shell = first.clone();
         let mut args: Vec<String> = Vec::new();
         if is_agent {

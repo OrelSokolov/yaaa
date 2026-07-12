@@ -180,11 +180,7 @@ impl TabManager {
         }
     }
 
-    pub fn add_group_with_path(
-        &mut self,
-        ctx: egui::Context,
-        path: Option<PathBuf>,
-    ) {
+    pub fn add_group_with_path(&mut self, ctx: egui::Context, path: Option<PathBuf>) {
         let group_id = self.next_group_id;
         self.next_group_id += 1;
 
@@ -376,7 +372,10 @@ impl TabManager {
             if t.is_agent {
                 // Find the stored agent_index for this tab.
                 self.groups.get(&group_id).and_then(|g| {
-                    g.tabs.iter().find(|info| info.id == id).and_then(|info| info.agent_index)
+                    g.tabs
+                        .iter()
+                        .find(|info| info.id == id)
+                        .and_then(|info| info.agent_index)
                 })
             } else {
                 None
@@ -425,10 +424,7 @@ impl TabManager {
         self.default_shell_cmd = shell_cmd;
     }
 
-    pub fn set_agents(
-        &mut self,
-        agents: [AgentConfig; MAX_AGENTS],
-    ) {
+    pub fn set_agents(&mut self, agents: [AgentConfig; MAX_AGENTS]) {
         self.agents = agents;
     }
 

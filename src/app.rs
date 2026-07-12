@@ -229,7 +229,8 @@ impl App {
                 let name = crate::terminal::manager::TabGroup::name_from_path(&path);
                 self.recent_projects.add_project(name.clone(), path.clone());
                 self.save_recent_projects();
-                self.tab_manager.add_group_with_path(ctx.clone(), Some(path));
+                self.tab_manager
+                    .add_group_with_path(ctx.clone(), Some(path));
                 self.tab_manager.save_groups();
             }
         }
@@ -353,9 +354,7 @@ impl eframe::App for App {
 
         // Keep the live preview in sync while the theme settings window is open.
         if self.window_manager.show_theme_settings {
-            self.window_manager
-                .editing_theme
-                .apply_to_visuals(&ctx);
+            self.window_manager.editing_theme.apply_to_visuals(&ctx);
             let opacity = self.window_manager.editing_theme.app_bg_opacity;
             if opacity != self.window_manager.last_applied_opacity {
                 self.window_manager.last_applied_opacity = opacity;
@@ -380,18 +379,21 @@ impl eframe::App for App {
                 ui.vertical(|ui| {
                     ui.add_space(2.0);
                     ui.horizontal(|ui| {
-                        ui.style_mut()
-                            .text_styles
-                            .insert(egui::TextStyle::Button, egui::FontId::proportional(theme.fonts.ui_font_size));
-                        ui.style_mut()
-                            .text_styles
-                            .insert(egui::TextStyle::Body, egui::FontId::proportional(theme.fonts.ui_font_size));
+                        ui.style_mut().text_styles.insert(
+                            egui::TextStyle::Button,
+                            egui::FontId::proportional(theme.fonts.ui_font_size),
+                        );
+                        ui.style_mut().text_styles.insert(
+                            egui::TextStyle::Body,
+                            egui::FontId::proportional(theme.fonts.ui_font_size),
+                        );
 
                         egui::MenuBar::new().ui(ui, |ui| {
                             ui.style_mut().spacing.button_padding = egui::vec2(6.0, 2.0);
-                            ui.style_mut()
-                                .text_styles
-                                .insert(egui::TextStyle::Button, egui::FontId::proportional(theme.fonts.ui_font_size));
+                            ui.style_mut().text_styles.insert(
+                                egui::TextStyle::Button,
+                                egui::FontId::proportional(theme.fonts.ui_font_size),
+                            );
 
                             ui.menu_button("Yet Another AI Agent", |ui| {
                                 apply_menu_style(ui, theme.fonts.ui_font_size);

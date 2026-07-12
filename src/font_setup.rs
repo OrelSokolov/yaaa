@@ -41,7 +41,9 @@ fn setup_fonts_with_fontconfig(ctx: &egui::Context) {
     for font_name in &fallback_fonts {
         if let Some(font_data) = load_system_font(&cache, font_name) {
             log::info!("Loaded fallback font: {}", font_name);
-            fonts.font_data.insert(font_name.clone(), Arc::new(font_data));
+            fonts
+                .font_data
+                .insert(font_name.clone(), Arc::new(font_data));
 
             // Add to monospace family as fallback (at the end of the list)
             fonts
@@ -87,10 +89,10 @@ fn get_fallback_fonts(cache: &rust_fontconfig::FcFontCache) -> Vec<String> {
 
     // Priority fallback fonts (for special characters)
     let priority_fallback = vec![
-        "Noto Color Emoji",      // Emoji
-        "Noto Sans Symbols",     // Mathematical symbols
-        "Noto Sans Symbols2",    // Additional symbols
-        "DejaVu Sans",           // Fallback
+        "Noto Color Emoji",   // Emoji
+        "Noto Sans Symbols",  // Mathematical symbols
+        "Noto Sans Symbols2", // Additional symbols
+        "DejaVu Sans",        // Fallback
     ];
 
     // Add priority fonts at the front
@@ -114,10 +116,7 @@ fn get_fallback_fonts(cache: &rust_fontconfig::FcFontCache) -> Vec<String> {
 
 /// Try to load a system font by name
 #[cfg(not(target_os = "macos"))]
-fn load_system_font(
-    cache: &rust_fontconfig::FcFontCache,
-    name: &str,
-) -> Option<FontData> {
+fn load_system_font(cache: &rust_fontconfig::FcFontCache, name: &str) -> Option<FontData> {
     use rust_fontconfig::FcPattern;
 
     let pattern = FcPattern {

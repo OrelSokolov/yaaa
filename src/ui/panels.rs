@@ -59,9 +59,10 @@ pub fn show_left_panel(
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         ui.style_mut().spacing.interact_size = egui::vec2(120.0, 24.0);
-                        ui.style_mut()
-                            .text_styles
-                            .insert(egui::TextStyle::Body, egui::FontId::proportional(theme.fonts.ui_font_size));
+                        ui.style_mut().text_styles.insert(
+                            egui::TextStyle::Body,
+                            egui::FontId::proportional(theme.fonts.ui_font_size),
+                        );
                         ui.add_space(8.0);
                         if tab_manager.groups.is_empty() {
                             let add_project_btn = ui
@@ -99,7 +100,9 @@ pub fn show_left_panel(
                                         response.rect.center(),
                                         egui::Align2::CENTER_CENTER,
                                         &group.name,
-                                        egui::FontId::proportional(theme.fonts.group_name_font_size),
+                                        egui::FontId::proportional(
+                                            theme.fonts.group_name_font_size,
+                                        ),
                                         text_color,
                                     );
 
@@ -193,9 +196,8 @@ pub fn show_left_panel(
                                     };
                                     let has_cmd = !agent.cmd.trim().is_empty();
                                     theme.agent_button.apply_to_visuals(ui);
-                                    let button =
-                                        egui::Button::new(format!("➕ {}", name))
-                                            .min_size(egui::vec2(0.0, 28.0));
+                                    let button = egui::Button::new(format!("➕ {}", name))
+                                        .min_size(egui::vec2(0.0, 28.0));
                                     let response = if has_cmd {
                                         ui.add(button)
                                     } else {
@@ -211,9 +213,7 @@ pub fn show_left_panel(
                                             "Configure a command for this agent in Agents settings",
                                         );
                                     } else if response.clicked() {
-                                        actions
-                                            .add_agent_tab_to_group
-                                            .push((*group_id, idx));
+                                        actions.add_agent_tab_to_group.push((*group_id, idx));
                                     }
                                 }
                             });
@@ -227,11 +227,7 @@ pub fn show_left_panel(
     actions
 }
 
-pub fn show_search_panel(
-    ui: &mut egui::Ui,
-    tab_manager: &mut TabManager,
-    theme: &AppTheme,
-) {
+pub fn show_search_panel(ui: &mut egui::Ui, tab_manager: &mut TabManager, theme: &AppTheme) {
     let Some(tab) = tab_manager.get_active() else {
         return;
     };
@@ -279,8 +275,7 @@ pub fn show_search_panel(
 
                         if search_no_match && !tab.search_query.is_empty() {
                             ui.label(
-                                egui::RichText::new("Not found")
-                                    .color(ui.visuals().text_color()),
+                                egui::RichText::new("Not found").color(ui.visuals().text_color()),
                             );
                         }
 
@@ -304,8 +299,7 @@ pub fn show_search_panel(
 
                         if ui
                             .scope(|ui| {
-                                ui.style_mut().spacing.button_padding =
-                                    egui::vec2(12.0, 1.0);
+                                ui.style_mut().spacing.button_padding = egui::vec2(12.0, 1.0);
                                 ui.button("Search").clicked()
                             })
                             .inner
@@ -335,108 +329,105 @@ pub fn show_central_panel(
             ..Default::default()
         })
         .show_inside(ui, |ui| {
-        if let Some(tab) = tab_manager.get_active() {
-            let content = tab.backend.last_content();
-            let is_alternate = content
-                .terminal_mode
-                .contains(egui_term::TerminalMode::ALT_SCREEN);
-            let total_lines = tab.backend.total_lines();
-            let viewport_height = ui.available_height();
-            let backend_id = tab.backend.id();
+            if let Some(tab) = tab_manager.get_active() {
+                let content = tab.backend.last_content();
+                let is_alternate = content
+                    .terminal_mode
+                    .contains(egui_term::TerminalMode::ALT_SCREEN);
+                let total_lines = tab.backend.total_lines();
+                let viewport_height = ui.available_height();
+                let backend_id = tab.backend.id();
 
-            let mode_switched = tab.was_alternate_last_frame != is_alternate;
-            let terminal_cleared =
-                !is_alternate && tab.scroll_state.normal.detect_clear(total_lines);
+                let mode_switched = tab.was_alternate_last_frame != is_alternate;
+                let terminal_cleared =
+                    !is_alternate && tab.scroll_state.normal.detect_clear(total_lines);
 
-            if terminal_cleared || mode_switched {
-                let state = tab.scroll_state.current(is_alternate);
-                state.last_line_count = total_lines;
-                state.user_scrolled_up = false;
+                if terminal_cleared || mode_switched {
+                    let state = tab.scroll_state.current(is_alternate);
+                    state.last_line_count = total_lines;
+                    state.user_scrolled_up = false;
 
-                if terminal_cleared {
-                    tab.backend.scroll_to_bottom();
-                    tab.backend.clear_history();
+                    if terminal_cleared {
+                        tab.backend.scroll_to_bottom();
+                        tab.backend.clear_history();
+                    }
                 }
-            }
 
-            tab.scroll_state.current(is_alternate).last_line_count = total_lines;
-            tab.was_alternate_last_frame = is_alternate;
+                tab.scroll_state.current(is_alternate).last_line_count = total_lines;
+                tab.was_alternate_last_frame = is_alternate;
 
-            let scroll_state = tab.scroll_state.current(is_alternate);
+                let scroll_state = tab.scroll_state.current(is_alternate);
 
-            egui::ScrollArea::vertical()
-                .id_salt(("terminal", backend_id))
-                .max_height(viewport_height)
-                .auto_shrink([false, false])
-                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                .show(ui, |ui| {
-                    ui.set_height(viewport_height);
+                egui::ScrollArea::vertical()
+                    .id_salt(("terminal", backend_id))
+                    .max_height(viewport_height)
+                    .auto_shrink([false, false])
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                    .show(ui, |ui| {
+                        ui.set_height(viewport_height);
 
-                    let should_block_input = tab.just_created;
-                    let terminal = egui_term::TerminalView::new(ui, &mut tab.backend)
-                        .set_theme(terminal_theme.clone())
-                        .set_font(terminal_font.clone())
-                        .set_focus(
-                            !window_manager.show_rename_group
-                                && !window_manager.show_settings
-                                && !window_manager.show_agents_settings
-                                && !window_manager.show_theme_settings
-                                && !window_manager.show_font_settings
-                                && !should_block_input
-                                && !tab.search_active,
-                        )
-                        .set_size(ui.available_size());
+                        let should_block_input = tab.just_created;
+                        let terminal = egui_term::TerminalView::new(ui, &mut tab.backend)
+                            .set_theme(terminal_theme.clone())
+                            .set_font(terminal_font.clone())
+                            .set_focus(
+                                !window_manager.show_rename_group
+                                    && !window_manager.show_settings
+                                    && !window_manager.show_agents_settings
+                                    && !window_manager.show_theme_settings
+                                    && !window_manager.show_font_settings
+                                    && !should_block_input
+                                    && !tab.search_active,
+                            )
+                            .set_size(ui.available_size());
 
-                    let response = ui.add(terminal);
+                        let response = ui.add(terminal);
 
-                    response.context_menu(|ui| {
-                        apply_menu_style(ui, theme.fonts.ui_font_size);
+                        response.context_menu(|ui| {
+                            apply_menu_style(ui, theme.fonts.ui_font_size);
 
-                        let has_selection = tab
-                            .backend
-                            .last_content()
-                            .selectable_range
-                            .is_some();
+                            let has_selection =
+                                tab.backend.last_content().selectable_range.is_some();
 
-                        if has_selection {
-                            if ui.button("📋 Copy").clicked() {
-                                let selected_text = tab.backend.selectable_content();
-                                let stripped_text: String = selected_text
-                                    .split('\n')
-                                    .map(|line| line.trim_end())
-                                    .collect::<Vec<_>>()
-                                    .join("\n");
-                                copy_to_clipboard(&stripped_text);
+                            if has_selection {
+                                if ui.button("📋 Copy").clicked() {
+                                    let selected_text = tab.backend.selectable_content();
+                                    let stripped_text: String = selected_text
+                                        .split('\n')
+                                        .map(|line| line.trim_end())
+                                        .collect::<Vec<_>>()
+                                        .join("\n");
+                                    copy_to_clipboard(&stripped_text);
+                                    ui.close();
+                                }
+                            }
+                            if ui.button("📝 Paste").clicked() {
+                                if let Some(text) = paste_from_clipboard() {
+                                    tab.backend
+                                        .process_command(egui_term::BackendCommand::Write(
+                                            text.into_bytes(),
+                                        ));
+                                }
                                 ui.close();
                             }
+                        });
+
+                        if tab.just_created {
+                            tab.just_created = false;
                         }
-                        if ui.button("📝 Paste").clicked() {
-                            if let Some(text) = paste_from_clipboard() {
-                                tab.backend
-                                    .process_command(egui_term::BackendCommand::Write(
-                                        text.into_bytes(),
-                                    ));
-                            }
-                            ui.close();
+
+                        if !is_alternate {
+                            let inner_rect = ui.min_rect();
+                            let viewport_bottom = ui.max_rect().bottom();
+                            let content_bottom = inner_rect.bottom();
+                            let is_at_bottom = content_bottom - viewport_bottom < 10.0;
+                            scroll_state.user_scrolled_up = !is_at_bottom;
                         }
                     });
-
-                    if tab.just_created {
-                        tab.just_created = false;
-                    }
-
-                    if !is_alternate {
-                        let inner_rect = ui.min_rect();
-                        let viewport_bottom = ui.max_rect().bottom();
-                        let content_bottom = inner_rect.bottom();
-                        let is_at_bottom = content_bottom - viewport_bottom < 10.0;
-                        scroll_state.user_scrolled_up = !is_at_bottom;
-                    }
+            } else {
+                ui.centered_and_justified(|ui| {
+                    ui.label("No active tab. Select a group and add a tab.");
                 });
-        } else {
-            ui.centered_and_justified(|ui| {
-                ui.label("No active tab. Select a group and add a tab.");
-            });
-        }
-    });
+            }
+        });
 }

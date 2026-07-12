@@ -1,8 +1,7 @@
 use crate::config::settings::{AgentConfig, MAX_AGENTS};
 use crate::hotkeys::get_hotkeys;
 use crate::theme::{
-    color_picker_button, font_size_slider, opacity_slider, AppButtonStyle, AppFonts,
-    AppTheme,
+    color_picker_button, font_size_slider, opacity_slider, AppButtonStyle, AppFonts, AppTheme,
 };
 
 pub struct WindowManager {
@@ -138,11 +137,7 @@ impl WindowManager {
             });
     }
 
-    fn show_rename_group_window(
-        &mut self,
-        ctx: &egui::Context,
-        actions: &mut WindowActions,
-    ) {
+    fn show_rename_group_window(&mut self, ctx: &egui::Context, actions: &mut WindowActions) {
         let mut should_save = false;
         let mut should_close = false;
 
@@ -184,11 +179,7 @@ impl WindowManager {
         }
     }
 
-    fn show_settings_window(
-        &mut self,
-        ctx: &egui::Context,
-        actions: &mut WindowActions,
-    ) {
+    fn show_settings_window(&mut self, ctx: &egui::Context, actions: &mut WindowActions) {
         let mut settings_save = false;
         let mut settings_cancel = false;
 
@@ -213,9 +204,7 @@ impl WindowManager {
 
                     ui.add_space(15.0);
 
-                    ui.checkbox(&mut self.editing_run_as_login_shell,
-                        "Run as login shell",
-                    );
+                    ui.checkbox(&mut self.editing_run_as_login_shell, "Run as login shell");
 
                     ui.add_space(15.0);
 
@@ -251,11 +240,7 @@ impl WindowManager {
         }
     }
 
-    fn show_agents_settings_window(
-        &mut self,
-        ctx: &egui::Context,
-        actions: &mut WindowActions,
-    ) {
+    fn show_agents_settings_window(&mut self, ctx: &egui::Context, actions: &mut WindowActions) {
         let mut save = false;
         let mut cancel = false;
 
@@ -290,22 +275,16 @@ impl WindowManager {
                                         ui.label(format!("Agent {}", i + 1));
 
                                         ui.horizontal(|ui| {
-                                            ui.checkbox(&mut agent.enabled,
-                                                "Enabled",
-                                            );
+                                            ui.checkbox(&mut agent.enabled, "Enabled");
                                         });
 
                                         ui.horizontal(|ui| {
                                             ui.label("Name:");
-                                            ui.text_edit_singleline(
-                                                &mut agent.name,
-                                            );
+                                            ui.text_edit_singleline(&mut agent.name);
                                         });
                                         ui.horizontal(|ui| {
                                             ui.label("Command:");
-                                            ui.text_edit_singleline(
-                                                &mut agent.cmd,
-                                            );
+                                            ui.text_edit_singleline(&mut agent.cmd);
                                         });
                                     });
                                 });
@@ -342,11 +321,7 @@ impl WindowManager {
         }
     }
 
-    fn show_theme_settings_window(
-        &mut self,
-        ctx: &egui::Context,
-        actions: &mut WindowActions,
-    ) {
+    fn show_theme_settings_window(&mut self, ctx: &egui::Context, actions: &mut WindowActions) {
         let mut save = false;
         let mut cancel = false;
         let mut restore_defaults = false;
@@ -421,11 +396,7 @@ impl WindowManager {
                                 &mut self.editing_theme.panel_text_hover,
                             );
                             ui.add_space(4.0);
-                            color_picker_button(
-                                ui,
-                                "Tab text",
-                                &mut self.editing_theme.tab_text,
-                            );
+                            color_picker_button(ui, "Tab text", &mut self.editing_theme.tab_text);
                             ui.add_space(4.0);
                             color_picker_button(
                                 ui,
@@ -449,8 +420,7 @@ impl WindowManager {
                                         .color(self.editing_theme.panel_text_hover),
                                 );
                                 ui.label(
-                                    egui::RichText::new("Tab")
-                                        .color(self.editing_theme.tab_text),
+                                    egui::RichText::new("Tab").color(self.editing_theme.tab_text),
                                 );
                             });
                             ui.horizontal(|ui| {
@@ -468,11 +438,7 @@ impl WindowManager {
                     egui::CollapsingHeader::new("Tab buttons")
                         .default_open(false)
                         .show(ui, |ui| {
-                            button_style_group(
-                                ui,
-                                &mut self.editing_theme.tab_button,
-                                "Tab",
-                            );
+                            button_style_group(ui, &mut self.editing_theme.tab_button, "Tab");
                         });
 
                     ui.add_space(8.0);
@@ -480,11 +446,7 @@ impl WindowManager {
                     egui::CollapsingHeader::new("Close buttons")
                         .default_open(false)
                         .show(ui, |ui| {
-                            button_style_group(
-                                ui,
-                                &mut self.editing_theme.close_button,
-                                "✖",
-                            );
+                            button_style_group(ui, &mut self.editing_theme.close_button, "✖");
                         });
 
                     ui.add_space(8.0);
@@ -563,11 +525,7 @@ impl WindowManager {
         }
     }
 
-    fn show_font_settings_window(
-        &mut self,
-        ctx: &egui::Context,
-        actions: &mut WindowActions,
-    ) {
+    fn show_font_settings_window(&mut self, ctx: &egui::Context, actions: &mut WindowActions) {
         let mut save = false;
         let mut cancel = false;
         let mut preview = false;
@@ -589,11 +547,7 @@ impl WindowManager {
                     ui.heading("Font Settings");
                     ui.add_space(10.0);
 
-                    font_size_slider(
-                        ui,
-                        "UI font size",
-                        &mut self.editing_fonts.ui_font_size,
-                    );
+                    font_size_slider(ui, "UI font size", &mut self.editing_fonts.ui_font_size);
                     ui.add_space(4.0);
                     font_size_slider(
                         ui,
@@ -601,11 +555,7 @@ impl WindowManager {
                         &mut self.editing_fonts.group_name_font_size,
                     );
                     ui.add_space(4.0);
-                    font_size_slider(
-                        ui,
-                        "Tab font size",
-                        &mut self.editing_fonts.tab_font_size,
-                    );
+                    font_size_slider(ui, "Tab font size", &mut self.editing_fonts.tab_font_size);
                     ui.add_space(4.0);
                     font_size_slider(
                         ui,
@@ -618,22 +568,17 @@ impl WindowManager {
                     ui.label("Preview");
                     ui.horizontal(|ui| {
                         ui.label(
-                            egui::RichText::new("UI text")
-                                .size(self.editing_fonts.ui_font_size),
+                            egui::RichText::new("UI text").size(self.editing_fonts.ui_font_size),
                         );
                         ui.label(
                             egui::RichText::new("Group")
                                 .size(self.editing_fonts.group_name_font_size),
                         );
+                        ui.label(egui::RichText::new("Tab").size(self.editing_fonts.tab_font_size));
                         ui.label(
-                            egui::RichText::new("Tab")
-                                .size(self.editing_fonts.tab_font_size),
-                        );
-                        ui.label(
-                            egui::RichText::new("Terminal")
-                                .font(egui::FontId::monospace(
-                                    self.editing_fonts.terminal_font_size,
-                                )),
+                            egui::RichText::new("Terminal").font(egui::FontId::monospace(
+                                self.editing_fonts.terminal_font_size,
+                            )),
                         );
                     });
 
@@ -690,11 +635,7 @@ impl WindowManager {
         self.show_rename_group = true;
     }
 
-    fn show_close_confirmation_window(
-        &mut self,
-        ctx: &egui::Context,
-        actions: &mut WindowActions,
-    ) {
+    fn show_close_confirmation_window(&mut self, ctx: &egui::Context, actions: &mut WindowActions) {
         let mut confirmed = false;
         let mut cancelled = false;
 
@@ -747,11 +688,7 @@ pub struct WindowActions {
 
 /// Render Normal + Hover color pickers and a live preview button for one
 /// button style group (close, agent or terminal).
-fn button_style_group(
-    ui: &mut egui::Ui,
-    style: &mut AppButtonStyle,
-    preview_label: &str,
-) {
+fn button_style_group(ui: &mut egui::Ui, style: &mut AppButtonStyle, preview_label: &str) {
     ui.add_space(6.0);
     ui.push_id("normal", |ui| {
         ui.label("Normal");

@@ -171,21 +171,26 @@ impl AppFonts {
     pub fn apply(&self, ctx: &egui::Context) {
         let mut style = ctx.global_style().as_ref().clone();
         let proportional = egui::FontFamily::Proportional;
-        style
-            .text_styles
-            .insert(egui::TextStyle::Body, egui::FontId::new(self.ui_font_size, proportional.clone()));
-        style
-            .text_styles
-            .insert(egui::TextStyle::Button, egui::FontId::new(self.ui_font_size, proportional.clone()));
-        style
-            .text_styles
-            .insert(egui::TextStyle::Heading, egui::FontId::new(self.ui_font_size + 4.0, proportional.clone()));
-        style
-            .text_styles
-            .insert(egui::TextStyle::Monospace, egui::FontId::new(self.terminal_font_size, egui::FontFamily::Monospace));
-        style
-            .text_styles
-            .insert(egui::TextStyle::Small, egui::FontId::new(self.ui_font_size - 2.0, proportional));
+        style.text_styles.insert(
+            egui::TextStyle::Body,
+            egui::FontId::new(self.ui_font_size, proportional.clone()),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Button,
+            egui::FontId::new(self.ui_font_size, proportional.clone()),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Heading,
+            egui::FontId::new(self.ui_font_size + 4.0, proportional.clone()),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Monospace,
+            egui::FontId::new(self.terminal_font_size, egui::FontFamily::Monospace),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Small,
+            egui::FontId::new(self.ui_font_size - 2.0, proportional),
+        );
         ctx.set_global_style(style);
     }
 }
@@ -363,11 +368,7 @@ fn color_button_with_black_border(ui: &mut egui::Ui, color: Color32) -> egui::Re
 
     if ui.is_rect_visible(rect) {
         let stroke_width = 1.0;
-        egui::color_picker::show_color_at(
-            ui.painter(),
-            color,
-            rect.shrink(stroke_width),
-        );
+        egui::color_picker::show_color_at(ui.painter(), color, rect.shrink(stroke_width));
         ui.painter().rect_stroke(
             rect,
             egui::CornerRadius::ZERO,
@@ -407,7 +408,11 @@ pub fn color_from_hex(hex: &str, fallback: Color32) -> Color32 {
         parse(&hex[1..3]),
         parse(&hex[3..5]),
         parse(&hex[5..7]),
-        if is_transparent { parse(&hex[7..9]) } else { Some(255) },
+        if is_transparent {
+            parse(&hex[7..9])
+        } else {
+            Some(255)
+        },
     ) {
         (Some(r), Some(g), Some(b), Some(a)) => Color32::from_rgba_unmultiplied(r, g, b, a),
         _ => fallback,
