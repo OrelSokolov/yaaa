@@ -15,22 +15,18 @@ fn paste_from_clipboard() -> Option<String> {
         .ok()
 }
 
+pub enum GroupAction {
+    RemoveGroup,
+    SelectTab(u64),
+    RemoveTab(u64),
+}
+
+#[derive(Default)]
 pub struct PanelActions {
     pub add_group_clicked: bool,
     pub add_tab_to_group: Option<u64>,
     pub add_agent_tab_to_group: Vec<(u64, usize)>,
-    pub group_actions: Vec<(u64, String, Vec<(u64, bool)>)>,
-}
-
-impl Default for PanelActions {
-    fn default() -> Self {
-        Self {
-            add_group_clicked: false,
-            add_tab_to_group: None,
-            add_agent_tab_to_group: Vec::new(),
-            group_actions: Vec::new(),
-        }
-    }
+    pub group_actions: Vec<(u64, GroupAction)>,
 }
 
 pub fn show_left_panel(
@@ -119,8 +115,7 @@ pub fn show_left_panel(
                                 {
                                     actions.group_actions.push((
                                         *group_id,
-                                        String::from("remove_group"),
-                                        Vec::new(),
+                                        GroupAction::RemoveGroup,
                                     ));
                                 }
                             });
@@ -152,11 +147,9 @@ pub fn show_left_panel(
                                         .on_hover_cursor(egui::CursorIcon::PointingHand);
                                     ui.style_mut().spacing.button_padding = old_padding;
                                     if response.clicked() {
-                                        actions.group_actions.push((
-                                            *group_id,
-                                            String::from("select_tab"),
-                                            vec![(tab_id, false)],
-                                        ));
+                                        actions
+                                            .group_actions
+                                            .push((*group_id, GroupAction::SelectTab(tab_id)));
                                     }
 
                                     theme.close_button.apply_to_visuals(ui);
@@ -164,11 +157,9 @@ pub fn show_left_panel(
                                         .add(egui::Button::new("✖").min_size(egui::vec2(30.0, 0.0)))
                                         .on_hover_cursor(egui::CursorIcon::PointingHand);
                                     if close_btn.clicked() {
-                                        actions.group_actions.push((
-                                            *group_id,
-                                            String::from("remove_tab"),
-                                            vec![(tab_id, false)],
-                                        ));
+                                        actions
+                                            .group_actions
+                                            .push((*group_id, GroupAction::RemoveTab(tab_id)));
                                     }
                                 });
                             }

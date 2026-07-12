@@ -4,8 +4,8 @@ use crate::menu::apply_menu_style;
 use crate::terminal::TabManager;
 use crate::theme::AppTheme;
 use crate::ui::{
-    show_central_panel, show_debug_panel, show_left_panel, show_search_panel, WindowActions,
-    WindowManager,
+    show_central_panel, show_debug_panel, show_left_panel, show_search_panel, GroupAction,
+    PanelActions, WindowActions, WindowManager,
 };
 use egui_term::BackendCommand;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -212,7 +212,7 @@ impl App {
     fn handle_panel_actions(
         &mut self,
         ctx: &egui::Context,
-        actions: super::ui::panels::PanelActions,
+        actions: PanelActions,
     ) {
         if actions.add_group_clicked {
             if let Some(path) = rfd::FileDialog::new().pick_folder() {
@@ -237,9 +237,9 @@ impl App {
             self.tab_manager.save_groups();
         }
 
-        for (group_id, action_type, data) in actions.group_actions {
-            match action_type.as_str() {
-                "remove_group" => {
+        for (group_id, action) in actions.group_actions {
+            match action {
+                GroupAction::RemoveGroup => {
                     if let Some(group) = self.tab_manager.groups.get(&group_id) {
                         self.recent_projects
                             .add_project(group.name.clone(), group.path.clone());
@@ -248,18 +248,13 @@ impl App {
                     self.tab_manager.remove_group(group_id);
                     self.tab_manager.save_groups();
                 }
-                "select_tab" => {
-                    if let Some(tab_id) = data.first() {
-                        self.tab_manager.set_active_tab(tab_id.0);
-                    }
+                GroupAction::SelectTab(tab_id) => {
+                    self.tab_manager.set_active_tab(tab_id);
                 }
-                "remove_tab" => {
-                    if let Some(tab_id) = data.first() {
-                        self.tab_manager.remove(tab_id.0);
-                        self.tab_manager.save_groups();
-                    }
+                GroupAction::RemoveTab(tab_id) => {
+                    self.tab_manager.remove(tab_id);
+                    self.tab_manager.save_groups();
                 }
-                _ => {}
             }
         }
     }
