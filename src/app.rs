@@ -1,4 +1,5 @@
 use crate::config::{RecentProjects, Settings};
+use crate::git_status::GitService;
 use crate::hotkeys::handle_keyboard_events;
 use crate::menu::apply_menu_style;
 use crate::terminal::TabManager;
@@ -24,6 +25,7 @@ pub struct App {
     theme: AppTheme,
     cached_terminal_theme: egui_term::TerminalTheme,
     cached_terminal_font: egui_term::TerminalFont,
+    git_service: GitService,
     /// When the theme settings window is open, this holds the live-preview theme
     /// so that `clear_color` can reflect opacity changes immediately.
     preview_theme: Option<AppTheme>,
@@ -74,10 +76,20 @@ impl App {
             settings.default_shell_cmd.clone(),
             settings.agents.clone(),
             settings.run_as_login_shell,
+            settings.enable_git_status,
             theme,
         );
 
         let recent_projects = RecentProjects::load();
+
+        let git_service = GitService::new(settings.enable_git_status, Some(cc.egui_ctx.clone()));
+        let project_paths: Vec<_> = tab_manager
+            .groups
+            .values()
+            .map(|g| g.path.clone())
+            .collect();
+        git_service.set_paths(project_paths);
+
         let cached_terminal_theme = theme.build_terminal_theme();
         let cached_terminal_font = theme.terminal_font();
 
@@ -94,6 +106,7 @@ impl App {
             theme,
             cached_terminal_theme,
             cached_terminal_font,
+            git_service,
             preview_theme: None,
             exit_confirmed: false,
         }
@@ -109,6 +122,7 @@ impl App {
             agents: self.window_manager.editing_agents.clone(),
             legacy_default_agent_cmd: None,
             theme: self.theme,
+            enable_git_status: self.window_manager.editing_enable_git_status,
         };
         settings.save();
     }
@@ -268,6 +282,15 @@ impl App {
         self.preview_theme.as_ref().unwrap_or(&self.theme)
     }
 
+    fn sync_git_paths(&self) {
+        let paths: Vec<_> = self.tab_manager
+            .groups
+            .values()
+            .map(|g| g.path.clone())
+            .collect();
+        self.git_service.set_paths(paths);
+    }
+
     fn handle_window_actions(&mut self, actions: WindowActions) {
         if let Some((group_id, name)) = actions.rename_group {
             self.tab_manager.rename_group(group_id, name);
@@ -288,6 +311,14 @@ impl App {
 
         if let Some(run_as_login_shell) = actions.run_as_login_shell {
             self.tab_manager.set_run_as_login_shell(run_as_login_shell);
+        }
+
+        if let Some(enable_git_status) = actions.enable_git_status {
+            if enable_git_status {
+                self.git_service.enable();
+            } else {
+                self.git_service.disable();
+            }
         }
 
         if let Some(theme) = actions.theme {
@@ -455,6 +486,24 @@ impl eframe::App for App {
 
                                 ui.separator();
 
+                                let git_status_label = if self.git_service.enabled() {
+                                    "🔀 Hide git status"
+                                } else {
+                                    "🔀 Show git status"
+                                };
+                                if ui.button(git_status_label).clicked() {
+                                    let new_state = !self.git_service.enabled();
+                                    if new_state {
+                                        self.git_service.enable();
+                                    } else {
+                                        self.git_service.disable();
+                                    }
+                                    self.window_manager.editing_enable_git_status = new_state;
+                                    self.window_manager.saved_enable_git_status = new_state;
+                                    self.save_settings();
+                                    ui.close();
+                                }
+
                                 if ui.button("💻 Terminal").clicked() {
                                     self.window_manager.show_settings = true;
                                     ui.close();
@@ -534,6 +583,7 @@ impl eframe::App for App {
             self.show_sidebar,
             &self.tab_manager.agents,
             &theme,
+            &self.git_service,
         );
 
         show_debug_panel(
@@ -586,6 +636,10 @@ impl eframe::App for App {
             &self.cached_terminal_theme,
             &self.cached_terminal_font,
         );
+
+        // Keep the Git watcher in sync with the current list of project groups.
+        // The service compares paths internally and does nothing if nothing changed.
+        self.sync_git_paths();
 
         // The terminal backend updates its state on a background PTY thread, but
         // alacritty_terminal does not emit events for ordinary screen output.

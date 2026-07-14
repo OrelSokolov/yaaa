@@ -7,6 +7,7 @@ mod app;
 mod config;
 mod constants;
 mod font_setup;
+mod git_status;
 mod hotkeys;
 mod menu;
 mod terminal;

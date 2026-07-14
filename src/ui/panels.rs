@@ -1,5 +1,6 @@
 use crate::config::settings::{AgentConfig, MAX_AGENTS};
 use crate::menu::apply_menu_style;
+use crate::git_status::GitService;
 use crate::terminal::{TabManager, TerminalBackendExt};
 use crate::theme::AppTheme;
 
@@ -36,6 +37,7 @@ pub fn show_left_panel(
     show_sidebar: bool,
     agents: &[AgentConfig; MAX_AGENTS],
     theme: &AppTheme,
+    git_service: &GitService,
 ) -> PanelActions {
     let mut actions = PanelActions::default();
 
@@ -78,7 +80,7 @@ pub fn show_left_panel(
                             let is_selected = active_group_id == Some(*group_id);
 
                             ui.horizontal(|ui| {
-                                ui.centered_and_justified(|ui| {
+                                let centered = ui.centered_and_justified(|ui| {
                                     let sense = egui::Sense::click_and_drag();
                                     let response =
                                         ui.allocate_rect(ui.available_rect_before_wrap(), sense);
@@ -103,9 +105,36 @@ pub fn show_left_panel(
                                     );
 
                                     if response.clicked() {
-                                        window_manager.rename_group(*group_id, group.name.clone());
+                                        window_manager
+                                            .rename_group(*group_id, group.name.clone());
                                     }
+
+                                    response
                                 });
+
+                                // Git status icon on the right side of the centered group name
+                                // area, drawn on top of the empty right part so the panel does
+                                // not get widened. Skipped entirely when the service is disabled.
+                                if git_service.enabled() {
+                                    let (icon, icon_color) =
+                                        match git_service.status_for(&group.path) {
+                                            Some(status) => (status.icon(), status.color()),
+                                            None => ("…", theme.panel_text),
+                                        };
+
+                                    let icon_size = theme.fonts.group_name_font_size;
+                                    let icon_pos = egui::pos2(
+                                        centered.response.rect.right() - 4.0,
+                                        centered.response.rect.center().y,
+                                    );
+                                    ui.painter().text(
+                                        icon_pos,
+                                        egui::Align2::RIGHT_CENTER,
+                                        icon,
+                                        egui::FontId::proportional(icon_size),
+                                        icon_color,
+                                    );
+                                }
 
                                 if group.tabs.is_empty()
                                     && ui
@@ -142,9 +171,21 @@ pub fn show_left_panel(
                                     // tabs feel roomier and easier to hit.
                                     let old_padding = ui.style().spacing.button_padding;
                                     ui.style_mut().spacing.button_padding = egui::vec2(4.0, 4.0);
+
+                                    // Center the tab label inside the button. The button is
+                                    // placed inside a fixed-size child layout so it doesn't
+                                    // widen the sidebar.
                                     let response = ui
-                                        .add(label)
+                                        .allocate_ui_with_layout(
+                                            egui::vec2(width, 30.0),
+                                            egui::Layout::centered_and_justified(
+                                                egui::Direction::LeftToRight,
+                                            ),
+                                            |ui| ui.add(label),
+                                        )
+                                        .inner
                                         .on_hover_cursor(egui::CursorIcon::PointingHand);
+
                                     ui.style_mut().spacing.button_padding = old_padding;
                                     if response.clicked() {
                                         actions

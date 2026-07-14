@@ -79,6 +79,8 @@ pub struct Settings {
     pub legacy_default_agent_cmd: Option<String>,
     #[serde(default = "default_theme")]
     pub theme: AppTheme,
+    #[serde(default = "default_enable_git_status")]
+    pub enable_git_status: bool,
 }
 
 fn default_show_terminal_lines() -> bool {
@@ -103,6 +105,10 @@ fn default_shell_cmd() -> String {
 
 fn default_theme() -> AppTheme {
     AppTheme::default()
+}
+
+fn default_enable_git_status() -> bool {
+    true
 }
 
 impl Settings {
