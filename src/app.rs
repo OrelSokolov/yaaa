@@ -30,6 +30,13 @@ pub struct App {
     /// so that `clear_color` can reflect opacity changes immediately.
     preview_theme: Option<AppTheme>,
     exit_confirmed: bool,
+    /// Persisted copy of the last terminal content size [w, h], saved to
+    /// settings so new terminals boot at the correct size on cold start.
+    last_terminal_layout: Option<[f32; 2]>,
+    /// Persisted copy of the last font cell metrics [w, h].
+    last_terminal_cell_metrics: Option<[f32; 2]>,
+    /// Deadline to flush `last_terminal_layout` to disk (debounced during resize).
+    terminal_layout_save_at: Option<std::time::Instant>,
 }
 
 fn setup_visuals(ctx: &egui::Context, theme: &AppTheme) {
@@ -64,6 +71,16 @@ impl App {
         let (command_sender, command_receiver) = mpsc::channel();
         let command_sender_clone = command_sender.clone();
 
+        let cached_terminal_font = theme.terminal_font();
+        // Font metrics cannot be queried yet (egui needs a Context::run() first),
+        // so seed from persisted values; they are recomputed on the first frame.
+        let terminal_layout_hint = settings
+            .last_terminal_layout
+            .map(|[w, h]| egui_term::Size::new(w, h));
+        let cell_metrics_hint = settings
+            .last_terminal_cell_metrics
+            .map(|[w, h]| egui_term::Size::new(w, h));
+
         let tab_manager = TabManager::new(
             command_sender_clone,
             cc,
@@ -71,6 +88,8 @@ impl App {
             settings.agents.clone(),
             settings.run_as_login_shell,
             settings.preload_tabs,
+            terminal_layout_hint,
+            cell_metrics_hint,
         );
 
         let window_manager = WindowManager::new(
@@ -93,7 +112,6 @@ impl App {
         git_service.set_paths(project_paths);
 
         let cached_terminal_theme = theme.build_terminal_theme();
-        let cached_terminal_font = theme.terminal_font();
 
         Self {
             _command_sender: command_sender,
@@ -111,6 +129,9 @@ impl App {
             git_service,
             preview_theme: None,
             exit_confirmed: false,
+            last_terminal_layout: settings.last_terminal_layout,
+            last_terminal_cell_metrics: settings.last_terminal_cell_metrics,
+            terminal_layout_save_at: None,
         }
     }
 
@@ -126,6 +147,8 @@ impl App {
             theme: self.theme,
             enable_git_status: self.window_manager.editing_enable_git_status,
             preload_tabs: self.window_manager.editing_preload_tabs,
+            last_terminal_layout: self.last_terminal_layout,
+            last_terminal_cell_metrics: self.last_terminal_cell_metrics,
         };
         settings.save();
     }
@@ -277,9 +300,13 @@ impl App {
         }
     }
 
-    fn rebuild_terminal_cache(&mut self) {
+    fn rebuild_terminal_cache(&mut self, ctx: &egui::Context) {
         self.cached_terminal_theme = self.theme.build_terminal_theme();
         self.cached_terminal_font = self.theme.terminal_font();
+        let metrics = self.cached_terminal_font.font_measure(ctx);
+        self.tab_manager.set_cell_metrics_hint(metrics);
+        self.last_terminal_cell_metrics = Some([metrics.width, metrics.height]);
+        self.terminal_layout_save_at = Some(std::time::Instant::now());
     }
 
     fn effective_theme(&self) -> &AppTheme {
@@ -334,7 +361,8 @@ impl App {
         if let Some(theme) = actions.theme {
             self.theme = theme;
             self.preview_theme = None;
-            self.rebuild_terminal_cache();
+            let ctx = self.egui_ctx.clone();
+            self.rebuild_terminal_cache(&ctx);
             setup_visuals(&self.egui_ctx, &self.theme);
             self.theme.fonts.apply(&self.egui_ctx);
             self.egui_ctx.request_repaint();
@@ -343,7 +371,8 @@ impl App {
 
         if let Some(fonts) = actions.fonts {
             self.theme.fonts = fonts;
-            self.rebuild_terminal_cache();
+            let ctx = self.egui_ctx.clone();
+            self.rebuild_terminal_cache(&ctx);
             self.theme.fonts.apply(&self.egui_ctx);
         }
 
@@ -661,6 +690,35 @@ impl eframe::App for App {
             &self.cached_terminal_theme,
             &self.cached_terminal_font,
         );
+
+        // Lazily compute real font cell metrics on the first frame (egui fonts
+        // are not available during App::new) and seed the terminal hint from
+        // them so newly created tabs boot at the correct column/row count.
+        if self.last_terminal_cell_metrics.is_none() {
+            let metrics = self.cached_terminal_font.font_measure(&ctx);
+            self.last_terminal_cell_metrics = Some([metrics.width, metrics.height]);
+            self.tab_manager.set_cell_metrics_hint(metrics);
+            self.terminal_layout_save_at = Some(std::time::Instant::now());
+        }
+
+        // Persist the terminal content size (debounced) so new terminals boot at
+        // the correct column/row count on the next cold start.
+        if let Some(hint) = self.tab_manager.terminal_layout_hint() {
+            let current = [hint.width, hint.height];
+            let changed = self.last_terminal_layout.map_or(true, |prev| {
+                (prev[0] - current[0]).abs() > 1.0 || (prev[1] - current[1]).abs() > 1.0
+            });
+            if changed {
+                self.last_terminal_layout = Some(current);
+                self.terminal_layout_save_at = Some(std::time::Instant::now());
+            }
+            if let Some(when) = self.terminal_layout_save_at {
+                if when.elapsed() > Duration::from_millis(600) {
+                    self.terminal_layout_save_at = None;
+                    self.save_settings();
+                }
+            }
+        }
 
         // Keep the Git watcher in sync with the current list of project groups.
         // The service compares paths internally and does nothing if nothing changed.

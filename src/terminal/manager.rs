@@ -59,9 +59,15 @@ pub struct TabManager {
     pub agents: [AgentConfig; MAX_AGENTS],
     pub run_as_login_shell: bool,
     preload_enabled: bool,
+    /// Last known terminal content size, used to seed new terminals at the
+    /// correct column/row count so the PTY does not boot at the 80x50 default.
+    terminal_layout_hint: Option<egui_term::Size>,
+    /// Current font cell metrics (cell width/height) matching the hint above.
+    cell_metrics_hint: Option<egui_term::Size>,
 }
 
 impl TabManager {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         command_sender: Sender<(u64, PtyEvent)>,
         cc: &eframe::CreationContext<'_>,
@@ -69,6 +75,8 @@ impl TabManager {
         agents: [AgentConfig; MAX_AGENTS],
         run_as_login_shell: bool,
         preload_enabled: bool,
+        terminal_layout_hint: Option<egui_term::Size>,
+        cell_metrics_hint: Option<egui_term::Size>,
     ) -> Self {
         let mut manager = Self {
             command_sender,
@@ -83,6 +91,8 @@ impl TabManager {
             agents,
             run_as_login_shell,
             preload_enabled,
+            terminal_layout_hint,
+            cell_metrics_hint,
         };
 
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -132,6 +142,8 @@ impl TabManager {
                         &shell_cmd,
                         use_agent,
                         !use_agent && manager.run_as_login_shell,
+                        manager.terminal_layout_hint,
+                        manager.cell_metrics_hint,
                     );
                     manager.tabs.insert(tab_info.id, tab);
                 }
@@ -270,6 +282,8 @@ impl TabManager {
             &shell_cmd,
             use_agent,
             !use_agent && self.run_as_login_shell,
+            self.terminal_layout_hint,
+            self.cell_metrics_hint,
         );
         self.tabs.insert(tab_id, tab);
 
@@ -485,6 +499,22 @@ impl TabManager {
         self.run_as_login_shell = run_as_login_shell;
     }
 
+    /// Update the last known terminal content size. Used to seed newly created
+    /// terminals so they boot at the correct column/row count.
+    pub fn set_terminal_layout_hint(&mut self, size: egui_term::Size) {
+        self.terminal_layout_hint = Some(size);
+    }
+
+    /// Update the current font cell metrics. Call after font/theme changes.
+    pub fn set_cell_metrics_hint(&mut self, metrics: egui_term::Size) {
+        self.cell_metrics_hint = Some(metrics);
+    }
+
+    /// Current terminal content size hint (last seen by the central panel).
+    pub fn terminal_layout_hint(&self) -> Option<egui_term::Size> {
+        self.terminal_layout_hint
+    }
+
     // ---- Preload pool ----
 
     fn spawn_preload_tab(
@@ -521,6 +551,8 @@ impl TabManager {
             &shell_cmd,
             use_agent,
             !use_agent && self.run_as_login_shell,
+            self.terminal_layout_hint,
+            self.cell_metrics_hint,
         );
 
         self.preload_pool.insert((group_id, agent_index), (tab_id, tab));

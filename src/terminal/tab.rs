@@ -143,6 +143,7 @@ impl Tab {
         return "cmd.exe".to_string();
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         ctx: egui::Context,
         command_sender: Sender<(u64, PtyEvent)>,
@@ -151,6 +152,8 @@ impl Tab {
         shell_cmd: &str,
         is_agent: bool,
         run_as_login_shell: bool,
+        layout_hint: Option<egui_term::Size>,
+        cell_hint: Option<egui_term::Size>,
     ) -> Self {
         let mut candidates = Self::shell_candidates(shell_cmd, is_agent).into_iter();
 
@@ -183,6 +186,8 @@ impl Tab {
                     shell: shell.clone(),
                     args: args.clone(),
                     working_directory: working_dir.clone(),
+                    initial_layout_size: layout_hint,
+                    initial_cell_metrics: cell_hint,
                     ..Default::default()
                 },
             );

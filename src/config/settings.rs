@@ -83,6 +83,16 @@ pub struct Settings {
     pub enable_git_status: bool,
     #[serde(default = "default_preload_tabs")]
     pub preload_tabs: bool,
+    /// Last known terminal content size [width, height] in pixels. Used to seed
+    /// new terminals at the correct column/row count on startup so the PTY does
+    /// not boot at the 80x50 default and resize on the first frame.
+    #[serde(default)]
+    pub last_terminal_layout: Option<[f32; 2]>,
+    /// Last known terminal font cell metrics [cell_width, cell_height] in
+    /// pixels. Seeded into new terminals at startup so they don't boot at the
+    /// 80x50 default. Recomputed on the first frame and on font changes.
+    #[serde(default)]
+    pub last_terminal_cell_metrics: Option<[f32; 2]>,
 }
 
 fn default_show_terminal_lines() -> bool {

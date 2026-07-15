@@ -361,6 +361,7 @@ pub fn show_central_panel(
             ..Default::default()
         })
         .show_inside(ui, |ui| {
+            let mut terminal_layout: Option<egui::Vec2> = None;
             if let Some(tab) = tab_manager.get_active() {
                 let content = tab.backend.last_content();
                 let is_alternate = content
@@ -399,6 +400,8 @@ pub fn show_central_panel(
                         ui.set_height(viewport_height);
 
                         let should_block_input = tab.just_created;
+                        let layout_size = ui.available_size();
+                        terminal_layout = Some(layout_size);
                         let terminal = egui_term::TerminalView::new(ui, &mut tab.backend)
                             .set_theme(terminal_theme.clone())
                             .set_font(terminal_font.clone())
@@ -411,7 +414,7 @@ pub fn show_central_panel(
                                     && !should_block_input
                                     && !tab.search_active,
                             )
-                            .set_size(ui.available_size());
+                            .set_size(layout_size);
 
                         let response = ui.add(terminal);
 
@@ -460,6 +463,10 @@ pub fn show_central_panel(
                 ui.centered_and_justified(|ui| {
                     ui.label("No active tab. Select a group and add a tab.");
                 });
+            }
+
+            if let Some(layout) = terminal_layout {
+                tab_manager.set_terminal_layout_hint(egui_term::Size::from(layout));
             }
         });
 }
