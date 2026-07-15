@@ -3,7 +3,11 @@ use crate::constants::GROUPS_FILE;
 use crate::terminal::tab::Tab;
 use egui_term::PtyEvent;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::PathBuf, sync::mpsc::Sender};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+    sync::mpsc::Sender,
+};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TabInfo {
@@ -45,6 +49,8 @@ pub struct TabManager {
     command_sender: Sender<(u64, PtyEvent)>,
     pub groups: BTreeMap<u64, TabGroup>,
     tabs: BTreeMap<u64, Tab>,
+    /// Key: (group_id, agent_index) where agent_index is None for terminal.
+    preload_pool: HashMap<(u64, Option<usize>), (u64, Tab)>,
     pub active_group_id: Option<u64>,
     pub active_tab_id: Option<u64>,
     next_group_id: u64,
@@ -52,6 +58,7 @@ pub struct TabManager {
     pub default_shell_cmd: String,
     pub agents: [AgentConfig; MAX_AGENTS],
     pub run_as_login_shell: bool,
+    preload_enabled: bool,
 }
 
 impl TabManager {
@@ -61,11 +68,13 @@ impl TabManager {
         default_shell_cmd: String,
         agents: [AgentConfig; MAX_AGENTS],
         run_as_login_shell: bool,
+        preload_enabled: bool,
     ) -> Self {
         let mut manager = Self {
             command_sender,
             groups: BTreeMap::new(),
             tabs: BTreeMap::new(),
+            preload_pool: HashMap::new(),
             active_group_id: None,
             active_tab_id: None,
             next_group_id: 0,
@@ -73,6 +82,7 @@ impl TabManager {
             default_shell_cmd,
             agents,
             run_as_login_shell,
+            preload_enabled,
         };
 
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -148,6 +158,8 @@ impl TabManager {
             manager.add_tab_to_group(group_id, cc.egui_ctx.clone(), None);
         }
 
+        manager.populate_preload_pool(cc.egui_ctx.clone());
+
         manager
     }
 
@@ -188,7 +200,8 @@ impl TabManager {
         self.groups.insert(group_id, group);
         self.active_group_id = Some(group_id);
 
-        self.add_tab_to_group(group_id, ctx, None);
+        self.add_tab_to_group(group_id, ctx.clone(), None);
+        self.populate_preload_for_group(group_id, ctx);
     }
 
     pub fn rename_group(&mut self, group_id: u64, new_name: String) {
@@ -205,6 +218,35 @@ impl TabManager {
         ctx: egui::Context,
         agent_index: Option<usize>,
     ) {
+        let preload_key = (group_id, agent_index);
+
+        if self.preload_enabled {
+            if let Some((tab_id, tab)) = self.preload_pool.remove(&preload_key) {
+                let use_agent = agent_index
+                    .and_then(|idx| self.agents.get(idx))
+                    .map(|a| a.enabled && !a.cmd.trim().is_empty())
+                    .unwrap_or(false);
+
+                self.tabs.insert(tab_id, tab);
+
+                if let Some(group) = self.groups.get_mut(&group_id) {
+                    group.tabs.push(TabInfo {
+                        id: tab_id,
+                        is_agent: use_agent,
+                        agent_index: if use_agent { agent_index } else { None },
+                        display_name: String::new(),
+                    });
+                }
+
+                self.refresh_display_names(group_id);
+                self.active_group_id = Some(group_id);
+                self.active_tab_id = Some(tab_id);
+
+                self.spawn_preload_tab(group_id, agent_index, ctx);
+                return;
+            }
+        }
+
         let tab_id = self.next_tab_id;
         self.next_tab_id += 1;
 
@@ -252,6 +294,7 @@ impl TabManager {
                 self.tabs.remove(&tab_info.id);
             }
         }
+        self.clear_preload_for_group(group_id);
         self.groups.remove(&group_id);
 
         if self.active_group_id == Some(group_id) {
@@ -304,6 +347,7 @@ impl TabManager {
     pub fn clear(&mut self) {
         self.groups.clear();
         self.tabs.clear();
+        self.preload_pool.clear();
         self.active_group_id = None;
         self.active_tab_id = None;
     }
@@ -427,12 +471,111 @@ impl TabManager {
         self.default_shell_cmd = shell_cmd;
     }
 
-    pub fn set_agents(&mut self, agents: [AgentConfig; MAX_AGENTS]) {
+    pub fn set_agents(&mut self, agents: [AgentConfig; MAX_AGENTS], ctx: egui::Context) {
         self.agents = agents;
         self.refresh_all_display_names();
+
+        if self.preload_enabled {
+            self.clear_preload_pool();
+            self.populate_preload_pool(ctx);
+        }
     }
 
     pub fn set_run_as_login_shell(&mut self, run_as_login_shell: bool) {
         self.run_as_login_shell = run_as_login_shell;
+    }
+
+    // ---- Preload pool ----
+
+    fn spawn_preload_tab(
+        &mut self,
+        group_id: u64,
+        agent_index: Option<usize>,
+        ctx: egui::Context,
+    ) {
+        if !self.preload_enabled {
+            return;
+        }
+
+        let group_path = match self.groups.get(&group_id) {
+            Some(g) => g.path.clone(),
+            None => return,
+        };
+
+        let (use_agent, shell_cmd) = match agent_index {
+            Some(idx) => match self.agents.get(idx) {
+                Some(a) if a.enabled && !a.cmd.trim().is_empty() => (true, a.cmd.clone()),
+                _ => return,
+            },
+            None => (false, self.default_shell_cmd.clone()),
+        };
+
+        let tab_id = self.next_tab_id;
+        self.next_tab_id += 1;
+
+        let tab = Tab::new(
+            ctx,
+            self.command_sender.clone(),
+            tab_id,
+            Some(group_path),
+            &shell_cmd,
+            use_agent,
+            !use_agent && self.run_as_login_shell,
+        );
+
+        self.preload_pool.insert((group_id, agent_index), (tab_id, tab));
+    }
+
+    pub fn populate_preload_for_group(&mut self, group_id: u64, ctx: egui::Context) {
+        if !self.preload_enabled {
+            return;
+        }
+
+        let key = (group_id, None);
+        if !self.preload_pool.contains_key(&key) {
+            self.spawn_preload_tab(group_id, None, ctx.clone());
+        }
+
+        for i in 0..MAX_AGENTS {
+            let key = (group_id, Some(i));
+            if !self.preload_pool.contains_key(&key) {
+                if let Some(agent) = self.agents.get(i) {
+                    if agent.enabled && !agent.cmd.trim().is_empty() {
+                        self.spawn_preload_tab(group_id, Some(i), ctx.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn populate_preload_pool(&mut self, ctx: egui::Context) {
+        if !self.preload_enabled {
+            return;
+        }
+        let group_ids: Vec<u64> = self.groups.keys().copied().collect();
+        for group_id in group_ids {
+            self.populate_preload_for_group(group_id, ctx.clone());
+        }
+    }
+
+    fn clear_preload_for_group(&mut self, group_id: u64) {
+        self.preload_pool.retain(|(gid, _), _| *gid != group_id);
+    }
+
+    pub fn clear_preload_pool(&mut self) {
+        self.preload_pool.clear();
+    }
+
+    pub fn remove_preload_tab(&mut self, tab_id: u64) {
+        self.preload_pool.retain(|_, (id, _)| *id != tab_id);
+    }
+
+    pub fn set_preload_enabled(&mut self, enabled: bool, ctx: egui::Context) {
+        self.preload_enabled = enabled;
+        if enabled {
+            self.populate_preload_pool(ctx);
+        } else {
+            self.clear_preload_pool();
+        }
     }
 }

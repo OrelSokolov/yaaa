@@ -9,3 +9,4 @@ pub const DEFAULT_RUN_AS_LOGIN_SHELL: bool = false;
 pub const DEFAULT_SHELL_CMD: &str = "";
 pub const DEFAULT_AGENT_CMD: &str = "opencode";
 pub const MAX_AGENTS: usize = 4;
+pub const DEFAULT_PRELOAD_TABS: bool = true;

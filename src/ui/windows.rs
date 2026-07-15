@@ -23,6 +23,8 @@ pub struct WindowManager {
     pub saved_run_as_login_shell: bool,
     pub editing_enable_git_status: bool,
     pub saved_enable_git_status: bool,
+    pub editing_preload_tabs: bool,
+    pub saved_preload_tabs: bool,
     pub editing_theme: AppTheme,
     pub saved_theme: AppTheme,
     pub editing_fonts: AppFonts,
@@ -43,6 +45,7 @@ impl WindowManager {
         run_as_login_shell: bool,
         enable_git_status: bool,
         theme: AppTheme,
+        preload_tabs: bool,
     ) -> Self {
         let editing_default_shell_cmd = default_shell_cmd.clone();
         let saved_default_shell_cmd = editing_default_shell_cmd.clone();
@@ -52,6 +55,8 @@ impl WindowManager {
         let saved_run_as_login_shell = run_as_login_shell;
         let editing_enable_git_status = enable_git_status;
         let saved_enable_git_status = enable_git_status;
+        let editing_preload_tabs = preload_tabs;
+        let saved_preload_tabs = preload_tabs;
         let editing_theme = theme;
         let saved_theme = editing_theme;
         let editing_fonts = editing_theme.fonts;
@@ -76,6 +81,8 @@ impl WindowManager {
             saved_run_as_login_shell,
             editing_enable_git_status,
             saved_enable_git_status,
+            editing_preload_tabs,
+            saved_preload_tabs,
             editing_theme,
             saved_theme,
             editing_fonts,
@@ -221,6 +228,13 @@ impl WindowManager {
 
                     ui.add_space(15.0);
 
+                    ui.checkbox(
+                        &mut self.editing_preload_tabs,
+                        "Enable terminal preload",
+                    );
+
+                    ui.add_space(15.0);
+
                     if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                         settings_cancel = true;
                     }
@@ -242,9 +256,11 @@ impl WindowManager {
             actions.default_shell_cmd = Some(self.editing_default_shell_cmd.clone());
             actions.run_as_login_shell = Some(self.editing_run_as_login_shell);
             actions.enable_git_status = Some(self.editing_enable_git_status);
+            actions.preload_tabs = Some(self.editing_preload_tabs);
             self.saved_default_shell_cmd = self.editing_default_shell_cmd.clone();
             self.saved_run_as_login_shell = self.editing_run_as_login_shell;
             self.saved_enable_git_status = self.editing_enable_git_status;
+            self.saved_preload_tabs = self.editing_preload_tabs;
             actions.should_save_settings = true;
             self.show_settings = false;
         }
@@ -252,6 +268,7 @@ impl WindowManager {
             self.editing_default_shell_cmd = self.saved_default_shell_cmd.clone();
             self.editing_run_as_login_shell = self.saved_run_as_login_shell;
             self.editing_enable_git_status = self.saved_enable_git_status;
+            self.editing_preload_tabs = self.saved_preload_tabs;
             self.show_settings = false;
         }
     }
@@ -696,6 +713,7 @@ pub struct WindowActions {
     pub agents: Option<[AgentConfig; MAX_AGENTS]>,
     pub run_as_login_shell: Option<bool>,
     pub enable_git_status: Option<bool>,
+    pub preload_tabs: Option<bool>,
     pub theme: Option<AppTheme>,
     pub fonts: Option<AppFonts>,
     pub should_save_groups: bool,

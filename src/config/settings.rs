@@ -81,6 +81,8 @@ pub struct Settings {
     pub theme: AppTheme,
     #[serde(default = "default_enable_git_status")]
     pub enable_git_status: bool,
+    #[serde(default = "default_preload_tabs")]
+    pub preload_tabs: bool,
 }
 
 fn default_show_terminal_lines() -> bool {
@@ -109,6 +111,10 @@ fn default_theme() -> AppTheme {
 
 fn default_enable_git_status() -> bool {
     true
+}
+
+fn default_preload_tabs() -> bool {
+    DEFAULT_PRELOAD_TABS
 }
 
 impl Settings {

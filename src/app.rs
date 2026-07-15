@@ -70,6 +70,7 @@ impl App {
             settings.default_shell_cmd.clone(),
             settings.agents.clone(),
             settings.run_as_login_shell,
+            settings.preload_tabs,
         );
 
         let window_manager = WindowManager::new(
@@ -78,6 +79,7 @@ impl App {
             settings.run_as_login_shell,
             settings.enable_git_status,
             theme,
+            settings.preload_tabs,
         );
 
         let recent_projects = RecentProjects::load();
@@ -123,6 +125,7 @@ impl App {
             legacy_default_agent_cmd: None,
             theme: self.theme,
             enable_git_status: self.window_manager.editing_enable_git_status,
+            preload_tabs: self.window_manager.editing_preload_tabs,
         };
         settings.save();
     }
@@ -136,6 +139,7 @@ impl App {
             match event {
                 egui_term::PtyEvent::Exit => {
                     self.tab_manager.remove(tab_id);
+                    self.tab_manager.remove_preload_tab(tab_id);
                 }
                 egui_term::PtyEvent::Title(title) => {
                     self.tab_manager.set_title(tab_id, title);
@@ -306,7 +310,8 @@ impl App {
         }
 
         if let Some(agents) = actions.agents {
-            self.tab_manager.set_agents(agents);
+            self.tab_manager
+                .set_agents(agents, self.egui_ctx.clone());
         }
 
         if let Some(run_as_login_shell) = actions.run_as_login_shell {
@@ -319,6 +324,11 @@ impl App {
             } else {
                 self.git_service.disable();
             }
+        }
+
+        if let Some(preload_tabs) = actions.preload_tabs {
+            self.tab_manager
+                .set_preload_enabled(preload_tabs, self.egui_ctx.clone());
         }
 
         if let Some(theme) = actions.theme {
@@ -500,6 +510,21 @@ impl eframe::App for App {
                                     }
                                     self.window_manager.editing_enable_git_status = new_state;
                                     self.window_manager.saved_enable_git_status = new_state;
+                                    self.save_settings();
+                                    ui.close();
+                                }
+
+                                let preload_label = if self.window_manager.editing_preload_tabs {
+                                    "⚡ Disable terminal preload"
+                                } else {
+                                    "⚡ Enable terminal preload"
+                                };
+                                if ui.button(preload_label).clicked() {
+                                    let new_state = !self.window_manager.editing_preload_tabs;
+                                    self.window_manager.editing_preload_tabs = new_state;
+                                    self.window_manager.saved_preload_tabs = new_state;
+                                    self.tab_manager
+                                        .set_preload_enabled(new_state, ctx.clone());
                                     self.save_settings();
                                     ui.close();
                                 }
