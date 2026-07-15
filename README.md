@@ -2,7 +2,7 @@
   <img src="./assets/logo-readme.png" alt="Logo" width="200" />
 </p>
 
-# Yet Another AI Agent
+# YAAA byOrlov
 
 Actually this is just fast and light terminal manager for another coding agents.
 
@@ -12,7 +12,7 @@ Actually this is just fast and light terminal manager for another coding agents.
 
 ### macOS
 
-The easiest way to install Yaaa on macOS is with the Ruby installer. It downloads the release binary, builds a local `.app` bundle and signs it ad-hoc, so Gatekeeper does not block it:
+The easiest way to install YAAA byOrlov on macOS is with the Ruby installer. It downloads the release binary, builds a local `.app` bundle and signs it ad-hoc, so Gatekeeper does not block it:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/OrelSokolov/yaaa/master/install.rb | ruby

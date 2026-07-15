@@ -116,7 +116,7 @@ impl WindowManager {
             .open(&mut self.show_about)
             .show(ctx, |ui| {
                 egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
-                    ui.heading("Yet Another AI Agent");
+                    ui.heading("YAAA byOrlov");
                     ui.label(format!("Version: {}", env!("CARGO_PKG_VERSION")));
                     ui.add_space(10.0);
                     ui.label("Multi-agent terminal with tabs and project management");

@@ -60,7 +60,7 @@
 
     <Product
         Id='*'
-        Name='yaaa'
+        Name='YAAA byOrlov'
         UpgradeCode='E42C30AE-2D54-40C5-9A52-5F3C9CBDC7DE'
         Manufacturer='Oleg Orlov'
         Language='1033'
@@ -69,7 +69,7 @@
 
         <Package Id='*'
             Keywords='Installer'
-            Description='Yet Another AI Agent'
+            Description='YAAA byOrlov'
             Manufacturer='Oleg Orlov'
             InstallerVersion='450'
             Languages='1033'
@@ -83,7 +83,7 @@
             DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
 
         <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
-        <Property Id='DiskPrompt' Value='yaaa Installation'/>
+        <Property Id='DiskPrompt' Value='YAAA byOrlov Installation'/>
 
         <Directory Id='TARGETDIR' Name='SourceDir'>
             <Directory Id='$(var.PlatformProgramFilesFolder)' Name='PFiles'>

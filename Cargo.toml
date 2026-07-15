@@ -2,7 +2,7 @@
 name = "yaaa"
 version = "0.5.5"
 edition = "2021"
-description = "Yet Another AI Agent"
+description = "YAAA byOrlov"
 authors = ["Oleg Orlov <orelcokolov@gmail.com>"]
 license = "MIT"
 
@@ -48,7 +48,7 @@ maintainer = "Oleg Orlov <orelcokolov@gmail.com>"
 revision = ""
 copyright = "Copyright (C) 2025 Oleg Orlov."
 extended-description = """\
-Multi-Agent Terminal - Yet Another AI Agent - \
+Multi-Agent Terminal - YAAA byOrlov - \
 Terminal application with AI agent support.
 """
 section = "utils"

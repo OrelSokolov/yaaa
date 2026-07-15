@@ -423,7 +423,7 @@ impl eframe::App for App {
                                 egui::FontId::proportional(theme.fonts.ui_font_size),
                             );
 
-                            ui.menu_button("Yet Another AI Agent", |ui| {
+                            ui.menu_button("YAAA byOrlov", |ui| {
                                 apply_menu_style(ui, theme.fonts.ui_font_size);
 
                                 if ui.button("ℹ About").clicked() {

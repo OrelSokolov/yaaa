@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=YAAA
-Comment=Yet Another AI Agent
+Name=YAAA byOrlov
+Comment=YAAA byOrlov
 Exec=/usr/bin/yaaa
 Icon=yaaa
 Type=Application

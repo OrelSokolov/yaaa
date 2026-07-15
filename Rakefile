@@ -86,7 +86,7 @@ namespace :build do
       exit 1
     end
 
-    app_name = 'Yaaa'
+    app_name = 'YAAA byOrlov'
     app_bundle = "target/release/#{app_name}.app"
     macos_dir = "#{app_bundle}/Contents/MacOS"
     resources_dir = "#{app_bundle}/Contents/Resources"

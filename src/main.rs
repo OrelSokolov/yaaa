@@ -39,7 +39,7 @@ fn try_run(renderer: eframe::Renderer, icon: IconData) -> eframe::Result {
     let viewport = egui::ViewportBuilder::default()
         .with_inner_size([400.0, 300.0])
         .with_min_inner_size([300.0, 220.0])
-        .with_title("Yet Another AI Agent")
+        .with_title("YAAA byOrlov")
         .with_app_id("yaaa")
         .with_icon(icon)
         .with_transparent(true)
@@ -52,7 +52,7 @@ fn try_run(renderer: eframe::Renderer, icon: IconData) -> eframe::Result {
     };
 
     eframe::run_native(
-        "Yet Another AI Agent",
+        "YAAA byOrlov",
         native_options,
         Box::new(|cc| Ok(Box::new(app::App::new(cc)))),
     )

@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# macOS installer for Yaaa.
+# macOS installer for YAAA byOrlov.
 # Downloads the universal binary from GitHub releases, builds a local .app
 # bundle and signs it ad-hoc. Because the file is created on the user's
 # machine, Gatekeeper does not treat it as a downloaded/quarantined file.
@@ -19,7 +19,7 @@ require 'tmpdir'
 require 'rbconfig'
 
 PACKAGE_NAME     = 'yaaa'
-APP_NAME         = 'Yaaa'
+APP_NAME         = 'YAAA byOrlov'
 BUNDLE_ID        = 'com.orelsokolov.yaaa'
 GITHUB_USER      = 'OrelSokolov'
 GITHUB_REPO      = 'yaaa'

@@ -1,8 +1,8 @@
-# YAAA — Features
+# YAAA byOrlov — Features
 
 ## Brief
 
-**YAAA — a fast, lightweight terminal that lets you run multiple AI coding agents side by side across all your projects.**
+**YAAA byOrlov — a fast, lightweight terminal that lets you run multiple AI coding agents side by side across all your projects.**
 
 ---
 
