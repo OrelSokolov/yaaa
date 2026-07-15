@@ -1,6 +1,6 @@
 [package]
 name = "yaaa"
-version = "0.5.5"
+version = "0.5.6"
 edition = "2021"
 description = "YAAA byOrlov"
 authors = ["Oleg Orlov <orelcokolov@gmail.com>"]
