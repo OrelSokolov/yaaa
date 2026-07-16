@@ -1,8 +1,10 @@
 use crate::config::settings::{AgentConfig, MAX_AGENTS};
 use crate::menu::apply_menu_style;
 use crate::git_status::GitStatusCache;
+use crate::system_monitor::{format_kb, SystemMonitor};
 use crate::terminal::{TabManager, TerminalBackendExt};
 use crate::theme::AppTheme;
+use egui::text::{LayoutJob, TextFormat};
 
 fn copy_to_clipboard(text: &str) {
     if let Ok(mut clipboard) = arboard::Clipboard::new() {
@@ -14,6 +16,19 @@ fn paste_from_clipboard() -> Option<String> {
     arboard::Clipboard::new()
         .and_then(|mut clipboard| clipboard.get_text())
         .ok()
+}
+
+/// Severity color for a tab's memory usage, applied to the inline memory text.
+/// Red above 500 MB, yellow above 200 MB, otherwise a placeholder that inherits
+/// the tab's normal (state-based) text color.
+fn mem_color_for(mem_kb: u64) -> egui::Color32 {
+    if mem_kb > 500 * 1024 {
+        egui::Color32::from_rgb(0xff, 0x55, 0x55)
+    } else if mem_kb > 200 * 1024 {
+        egui::Color32::from_rgb(0xff, 0xd6, 0x33)
+    } else {
+        egui::Color32::PLACEHOLDER
+    }
 }
 
 pub enum GroupAction {
@@ -30,6 +45,7 @@ pub struct PanelActions {
     pub group_actions: Vec<(u64, GroupAction)>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn show_left_panel(
     ui: &mut egui::Ui,
     tab_manager: &TabManager,
@@ -39,6 +55,8 @@ pub fn show_left_panel(
     theme: &AppTheme,
     git_cache: &mut GitStatusCache,
     git_enabled: bool,
+    show_tab_memory: bool,
+    system_monitor: &mut SystemMonitor,
 ) -> PanelActions {
     let mut actions = PanelActions::default();
 
@@ -159,6 +177,48 @@ pub fn show_left_panel(
                                 let tab_name = tab_info.display_name.clone();
                                 let is_active = active_tab_id == Some(tab_id);
 
+                                // When the per-tab memory mode is on, show each
+                                // tab's resident process-tree memory next to its
+                                // name, e.g. "1. Terminal (45 MB)". The memory
+                                // text is tinted by severity: red above 500 MB,
+                                // yellow above 200 MB. The name keeps the tab's
+                                // normal text color via Color32::PLACEHOLDER.
+                                let display_label: egui::WidgetText = if show_tab_memory {
+                                    match tab_manager.get_tab(tab_id) {
+                                        Some(tab) => {
+                                            let mem_kb = system_monitor
+                                                .process_tree_memory_kb(tab.backend.pty_id());
+                                            let mem_color = mem_color_for(mem_kb);
+                                            let font_id = egui::FontId::proportional(
+                                                theme.fonts.tab_font_size,
+                                            );
+                                            let mut job = LayoutJob::default();
+                                            job.append(
+                                                &tab_name,
+                                                0.0,
+                                                TextFormat {
+                                                    font_id: font_id.clone(),
+                                                    color: egui::Color32::PLACEHOLDER,
+                                                    ..Default::default()
+                                                },
+                                            );
+                                            job.append(
+                                                &format!(" ({})", format_kb(mem_kb)),
+                                                0.0,
+                                                TextFormat {
+                                                    font_id,
+                                                    color: mem_color,
+                                                    ..Default::default()
+                                                },
+                                            );
+                                            job.into()
+                                        }
+                                        None => tab_name.into(),
+                                    }
+                                } else {
+                                    tab_name.into()
+                                };
+
                                 ui.horizontal(|ui| {
                                     let width = ui.available_width() * 0.9;
                                     theme.tab_button.apply_to_visuals(ui);
@@ -168,7 +228,7 @@ pub fn show_left_panel(
                                         egui::TextStyle::Button,
                                         egui::FontId::proportional(theme.fonts.tab_font_size),
                                     );
-                                    let label = egui::Button::selectable(is_active, tab_name)
+                                    let label = egui::Button::selectable(is_active, display_label)
                                         .min_size(egui::vec2(width, 30.0));
                                     // Add extra vertical padding inside the tab button so the
                                     // tabs feel roomier and easier to hit.

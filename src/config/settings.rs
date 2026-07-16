@@ -67,6 +67,10 @@ pub struct Settings {
     pub show_fps: bool,
     #[serde(default = "default_show_sidebar")]
     pub show_sidebar: bool,
+    #[serde(default = "default_show_system_monitor")]
+    pub show_system_monitor: bool,
+    #[serde(default = "default_show_tab_memory")]
+    pub show_tab_memory: bool,
     #[serde(default = "default_run_as_login_shell")]
     pub run_as_login_shell: bool,
     #[serde(default = "default_shell_cmd")]
@@ -105,6 +109,14 @@ fn default_show_fps() -> bool {
 
 fn default_show_sidebar() -> bool {
     DEFAULT_SHOW_SIDEBAR
+}
+
+fn default_show_system_monitor() -> bool {
+    DEFAULT_SHOW_SYSTEM_MONITOR
+}
+
+fn default_show_tab_memory() -> bool {
+    DEFAULT_SHOW_TAB_MEMORY
 }
 
 fn default_run_as_login_shell() -> bool {

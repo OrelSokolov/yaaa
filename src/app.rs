@@ -2,6 +2,7 @@ use crate::config::{RecentProjects, Settings};
 use crate::git_status::GitStatusCache;
 use crate::hotkeys::handle_keyboard_events;
 use crate::menu::apply_menu_style;
+use crate::system_monitor::{format_kb, SystemMonitor};
 use crate::terminal::TabManager;
 use crate::theme::AppTheme;
 use crate::ui::{
@@ -22,11 +23,14 @@ pub struct App {
     pub show_terminal_lines: bool,
     pub show_fps: bool,
     pub show_sidebar: bool,
+    pub show_system_monitor: bool,
+    pub show_tab_memory: bool,
     theme: AppTheme,
     cached_terminal_theme: egui_term::TerminalTheme,
     cached_terminal_font: egui_term::TerminalFont,
     git_cache: GitStatusCache,
     enable_git_status: bool,
+    system_monitor: SystemMonitor,
     /// When the theme settings window is open, this holds the live-preview theme
     /// so that `clear_color` can reflect opacity changes immediately.
     preview_theme: Option<AppTheme>,
@@ -118,11 +122,14 @@ impl App {
             show_terminal_lines: settings.show_terminal_lines,
             show_fps: settings.show_fps,
             show_sidebar: settings.show_sidebar,
+            show_system_monitor: settings.show_system_monitor,
+            show_tab_memory: settings.show_tab_memory,
             theme,
             cached_terminal_theme,
             cached_terminal_font,
             git_cache,
             enable_git_status: settings.enable_git_status,
+            system_monitor: SystemMonitor::new(),
             preview_theme: None,
             exit_confirmed: false,
             last_terminal_layout: settings.last_terminal_layout,
@@ -136,6 +143,8 @@ impl App {
             show_terminal_lines: self.show_terminal_lines,
             show_fps: self.show_fps,
             show_sidebar: self.show_sidebar,
+            show_system_monitor: self.show_system_monitor,
+            show_tab_memory: self.show_tab_memory,
             run_as_login_shell: self.window_manager.editing_run_as_login_shell,
             default_shell_cmd: self.window_manager.editing_default_shell_cmd.clone(),
             agents: self.window_manager.editing_agents.clone(),
@@ -418,6 +427,22 @@ impl eframe::App for App {
 
         let theme = *self.effective_theme();
 
+        // Sample the system monitor once per frame. `memory()` refreshes at
+        // most every second; the per-tab sum walks process trees (cached, so it
+        // is cheap after the first call). Both values are copied out so there
+        // is no lingering borrow of `system_monitor` inside the UI closures.
+        let mem_percent = self.system_monitor.memory().percent;
+        let total_tabs_kb: u64 = {
+            let tm = &self.tab_manager;
+            let sm = &mut self.system_monitor;
+            tm.groups
+                .values()
+                .flat_map(|g| g.tabs.iter())
+                .filter_map(|t| tm.get_tab(t.id))
+                .map(|tab| sm.process_tree_memory_kb(tab.backend.pty_id()))
+                .sum()
+        };
+
         egui::Panel::top("menu_bar")
             .frame(egui::Frame {
                 fill: theme.app_bg_with_opacity(),
@@ -546,6 +571,17 @@ impl eframe::App for App {
                                     ui.close();
                                 }
 
+                                let sysmon_label = if self.show_system_monitor {
+                                    "🖥 Hide system monitor"
+                                } else {
+                                    "🖥 Show system monitor"
+                                };
+                                if ui.button(sysmon_label).clicked() {
+                                    self.show_system_monitor = !self.show_system_monitor;
+                                    self.save_settings();
+                                    ui.close();
+                                }
+
                                 if ui.button("💻 Terminal").clicked() {
                                     self.window_manager.show_settings = true;
                                     ui.close();
@@ -608,6 +644,24 @@ impl eframe::App for App {
                                         self.show_sidebar = !self.show_sidebar;
                                         self.save_settings();
                                     }
+
+                                    if self.show_system_monitor {
+                                        ui.add_space(16.0);
+                                        ui.label(format!("Total: {}", format_kb(total_tabs_kb)));
+
+                                        let ram_label = format!("RAM: {:.0}%", mem_percent);
+                                        if ui
+                                            .button(ram_label)
+                                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                                            .on_hover_text(
+                                                "Click to toggle per-tab memory next to tab names",
+                                            )
+                                            .clicked()
+                                        {
+                                            self.show_tab_memory = !self.show_tab_memory;
+                                            self.save_settings();
+                                        }
+                                    }
                                 },
                             );
                         });
@@ -627,6 +681,8 @@ impl eframe::App for App {
             &theme,
             &mut self.git_cache,
             self.enable_git_status,
+            self.show_tab_memory,
+            &mut self.system_monitor,
         );
 
         show_debug_panel(

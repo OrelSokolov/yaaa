@@ -474,6 +474,10 @@ impl TabManager {
         self.tabs.get_mut(&id)
     }
 
+    pub fn get_tab(&self, id: u64) -> Option<&Tab> {
+        self.tabs.get(&id)
+    }
+
     pub fn get_active(&mut self) -> Option<&mut Tab> {
         let _group_id = self.active_group_id?;
         let tab_id = self.active_tab_id?;

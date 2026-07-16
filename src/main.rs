@@ -10,6 +10,7 @@ mod font_setup;
 mod git_status;
 mod hotkeys;
 mod menu;
+mod system_monitor;
 mod terminal;
 mod theme;
 mod ui;
