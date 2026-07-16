@@ -1,6 +1,6 @@
 use crate::config::settings::{AgentConfig, MAX_AGENTS};
 use crate::menu::apply_menu_style;
-use crate::git_status::GitService;
+use crate::git_status::GitStatusCache;
 use crate::terminal::{TabManager, TerminalBackendExt};
 use crate::theme::AppTheme;
 
@@ -37,7 +37,8 @@ pub fn show_left_panel(
     show_sidebar: bool,
     agents: &[AgentConfig; MAX_AGENTS],
     theme: &AppTheme,
-    git_service: &GitService,
+    git_cache: &mut GitStatusCache,
+    git_enabled: bool,
 ) -> PanelActions {
     let mut actions = PanelActions::default();
 
@@ -115,10 +116,12 @@ pub fn show_left_panel(
                                 // Git status icon on the right side of the centered group name
                                 // area, drawn on top of the empty right part so the panel does
                                 // not get widened. Skipped entirely when the service is disabled.
-                                if git_service.enabled() {
+                                if git_enabled {
                                     let (icon, icon_color) =
-                                        match git_service.status_for(&group.path) {
-                                            Some(status) => (status.icon(), status.color()),
+                                        match git_cache.get_or_refresh(&group.path) {
+                                            Some(status) => {
+                                                (status.sync_status.icon(), status.sync_status.color())
+                                            }
                                             None => ("…", theme.panel_text),
                                         };
 

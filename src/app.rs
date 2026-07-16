@@ -1,5 +1,5 @@
 use crate::config::{RecentProjects, Settings};
-use crate::git_status::GitService;
+use crate::git_status::GitStatusCache;
 use crate::hotkeys::handle_keyboard_events;
 use crate::menu::apply_menu_style;
 use crate::terminal::TabManager;
@@ -25,7 +25,8 @@ pub struct App {
     theme: AppTheme,
     cached_terminal_theme: egui_term::TerminalTheme,
     cached_terminal_font: egui_term::TerminalFont,
-    git_service: GitService,
+    git_cache: GitStatusCache,
+    enable_git_status: bool,
     /// When the theme settings window is open, this holds the live-preview theme
     /// so that `clear_color` can reflect opacity changes immediately.
     preview_theme: Option<AppTheme>,
@@ -103,13 +104,7 @@ impl App {
 
         let recent_projects = RecentProjects::load();
 
-        let git_service = GitService::new(settings.enable_git_status, Some(cc.egui_ctx.clone()));
-        let project_paths: Vec<_> = tab_manager
-            .groups
-            .values()
-            .map(|g| g.path.clone())
-            .collect();
-        git_service.set_paths(project_paths);
+        let git_cache = GitStatusCache::new(Duration::from_secs(60));
 
         let cached_terminal_theme = theme.build_terminal_theme();
 
@@ -126,7 +121,8 @@ impl App {
             theme,
             cached_terminal_theme,
             cached_terminal_font,
-            git_service,
+            git_cache,
+            enable_git_status: settings.enable_git_status,
             preview_theme: None,
             exit_confirmed: false,
             last_terminal_layout: settings.last_terminal_layout,
@@ -313,13 +309,13 @@ impl App {
         self.preview_theme.as_ref().unwrap_or(&self.theme)
     }
 
-    fn sync_git_paths(&self) {
+    fn sync_git_paths(&mut self) {
         let paths: Vec<_> = self.tab_manager
             .groups
             .values()
             .map(|g| g.path.clone())
             .collect();
-        self.git_service.set_paths(paths);
+        self.git_cache.retain(|p| paths.iter().any(|q| q == p));
     }
 
     fn handle_window_actions(&mut self, actions: WindowActions) {
@@ -346,11 +342,7 @@ impl App {
         }
 
         if let Some(enable_git_status) = actions.enable_git_status {
-            if enable_git_status {
-                self.git_service.enable();
-            } else {
-                self.git_service.disable();
-            }
+            self.enable_git_status = enable_git_status;
         }
 
         if let Some(preload_tabs) = actions.preload_tabs {
@@ -525,18 +517,14 @@ impl eframe::App for App {
 
                                 ui.separator();
 
-                                let git_status_label = if self.git_service.enabled() {
+                                let git_status_label = if self.enable_git_status {
                                     "🔀 Hide git status"
                                 } else {
                                     "🔀 Show git status"
                                 };
                                 if ui.button(git_status_label).clicked() {
-                                    let new_state = !self.git_service.enabled();
-                                    if new_state {
-                                        self.git_service.enable();
-                                    } else {
-                                        self.git_service.disable();
-                                    }
+                                    let new_state = !self.enable_git_status;
+                                    self.enable_git_status = new_state;
                                     self.window_manager.editing_enable_git_status = new_state;
                                     self.window_manager.saved_enable_git_status = new_state;
                                     self.save_settings();
@@ -637,7 +625,8 @@ impl eframe::App for App {
             self.show_sidebar,
             &self.tab_manager.agents,
             &theme,
-            &self.git_service,
+            &mut self.git_cache,
+            self.enable_git_status,
         );
 
         show_debug_panel(
