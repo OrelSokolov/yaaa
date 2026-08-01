@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.7] - 2026-08-01
+
+### Fixed
+- Fix complete UI freeze when clicking terminal hyperlinks (e.g. `http://localhost:5180/` from `npm run dev`). The link opener (`xdg-open`/etc) now runs in a background thread instead of blocking the UI render loop.
+
 ## [0.4.15] - 2026-06-26
 
 ### Changed
