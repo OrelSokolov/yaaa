@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.8] - 2026-08-02
+
+### Fixed
+- Fix hard freeze (deadlock) when opening a terminal hyperlink (e.g. `http://localhost:5180/` from `npm run dev`). `open_link()` was re-acquiring an already-held `FairMutex` on the UI thread; since `FairMutex` is non-reentrant, this deadlocked silently in release builds on every link click.
+
 ## [0.5.7] - 2026-08-01
 
 ### Fixed
