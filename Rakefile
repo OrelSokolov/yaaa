@@ -91,6 +91,9 @@ namespace :build do
     macos_dir = "#{app_bundle}/Contents/MacOS"
     resources_dir = "#{app_bundle}/Contents/Resources"
     dmg_path = "target/release/#{PACKAGE_NAME}_#{VERSION}_macos.dmg"
+    temp_dmg = 'target/release/temp-dmg-build'
+    volume_name = app_name
+    volume_path = "/Volumes/#{volume_name}"
 
     puts 'Building release binaries...'
     build_universal_binary
@@ -140,7 +143,86 @@ namespace :build do
 
     puts 'Creating DMG...'
     FileUtils.rm_f(dmg_path)
-    sh "hdiutil create -volname '#{app_name}' -srcfolder '#{app_bundle}' -ov -format UDZO '#{dmg_path}'"
+    FileUtils.rm_f("#{temp_dmg}.dmg")
+
+    Dir.glob('/Volumes/Yaaa*').each do |old_volume|
+      puts "Detaching previously mounted #{old_volume}..."
+      system("hdiutil detach '#{old_volume}' >/dev/null 2>&1")
+    end
+
+    app_size_mb = `du -sm '#{app_bundle}' 2>/dev/null | awk '{print $1}'`.to_i
+    dmg_size_mb = [app_size_mb + 50, 150].max
+
+    puts "Creating temporary DMG (#{dmg_size_mb}MB)..."
+    sh "hdiutil create -size #{dmg_size_mb}m -fs HFS+ -volname '#{volume_name}' -ov -o '#{temp_dmg}'"
+
+    temp_dmg_file = "#{temp_dmg}.dmg"
+    puts 'Mounting DMG...'
+    attach_output = `hdiutil attach '#{temp_dmg_file}' 2>&1`
+    raise "Failed to mount DMG: #{attach_output}" unless $?.success?
+
+    volume_path = attach_output.lines.last&.split("\t")&.last&.strip
+    raise 'Could not determine DMG mount point' if volume_path.nil? || volume_path.empty?
+
+    begin
+      puts "DMG mounted at #{volume_path}"
+      puts 'Copying app bundle...'
+      sh "cp -R -X '#{app_bundle}' '#{volume_path}/'"
+
+      volume_app = File.join(volume_path, "#{app_name}.app")
+      if system("codesign --force --deep --sign - '#{volume_app}' >/dev/null 2>&1")
+        puts '  Signed Yaaa.app in DMG'
+      else
+        puts '  Warning: failed to sign Yaaa.app in DMG'
+      end
+
+      puts 'Creating Applications symlink...'
+      sh "ln -s /Applications '#{volume_path}/Applications'"
+
+      puts 'Styling DMG window...'
+      script_path = 'target/release/dmg_style.scpt'
+      applescript = <<~APPLESCRIPT
+        tell application "Finder"
+          activate
+          tell disk "#{volume_name}"
+            open
+            delay 2
+            set position of item "#{app_name}.app" to {180, 180}
+            set position of item "Applications" to {480, 180}
+            set current view of container window to icon view
+            set toolbar visible of container window to false
+            set statusbar visible of container window to false
+            set bounds of container window to {200, 100, 750, 500}
+            set viewOptions to icon view options of container window
+            set arrangement of viewOptions to not arranged
+            set icon size of viewOptions to 128
+            update without registering applications
+            delay 2
+            close
+          end tell
+        end tell
+      APPLESCRIPT
+
+      File.write(script_path, applescript)
+      if system("osascript '#{script_path}' >/dev/null 2>&1")
+        puts '  DMG window styled'
+      else
+        puts '  Warning: Failed to style DMG window, continuing with plain layout'
+      end
+      FileUtils.rm_f(script_path)
+    ensure
+      if volume_path
+        puts 'Detaching DMG...'
+        unless system("hdiutil detach '#{volume_path}' >/dev/null 2>&1")
+          puts '  Warning: Failed to cleanly detach DMG'
+        end
+      end
+    end
+
+    puts 'Compressing DMG...'
+    sh "hdiutil convert '#{temp_dmg_file}' -format UDZO -o '#{dmg_path}'"
+
+    FileUtils.rm_f(temp_dmg_file)
 
     puts "Done: #{dmg_path}"
   end
