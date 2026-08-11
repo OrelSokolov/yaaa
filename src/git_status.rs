@@ -1,5 +1,10 @@
-use std::path::Path;
-use std::time::{Duration, Instant};
+use git2::{BranchType, Repository, StatusOptions};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 /// Synchronization state of a Git branch relative to its upstream.
 /// Conflicts take precedence over divergence/pull/push because they must be
@@ -69,60 +74,42 @@ pub struct GitStatus {
     pub sync_status: GitSyncStatus,
 }
 
-/// Detect Git status for the directory at `path`.
-/// Returns `None` if `path` is not inside a Git repository or `git` is unavailable.
-pub fn get_git_status(path: &Path) -> Option<GitStatus> {
-    if !is_git_repo(path) {
-        return None;
-    }
+/// Detect Git status for the directory at `path` using libgit2.
+/// Returns `None` if `path` is not inside a Git repository.
+pub fn compute_git_status(path: &Path) -> Option<GitStatus> {
+    let repo = Repository::open(path).ok()?;
+    let head = repo.head().ok()?;
+    let branch = head.shorthand().map(|s| s.to_string());
 
-    let output = std::process::Command::new("git")
-        .args(["status", "--porcelain=v1", "-b", "--ignore-submodules"])
-        .current_dir(path)
-        .output()
-        .ok()?;
+    // Working tree / index status.
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(false)
+        .exclude_submodules(true);
+    let statuses = repo.statuses(Some(&mut opts)).ok()?;
 
-    if !output.status.success() {
-        return None;
-    }
-
-    parse_git_status(&String::from_utf8_lossy(&output.stdout))
-}
-
-fn is_git_repo(path: &Path) -> bool {
-    std::process::Command::new("git")
-        .args(["rev-parse", "--git-dir"])
-        .current_dir(path)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
-/// Parse the output of `git status --porcelain=v1 -b`.
-/// Exposed so the sync-state logic can be unit-tested without running git.
-pub fn parse_git_status(output: &str) -> Option<GitStatus> {
-    let mut lines = output.lines();
-    let branch_line = lines.next()?;
-    if !branch_line.starts_with("## ") {
-        return None;
-    }
-
-    let (branch, ahead, behind) = parse_branch_line(branch_line);
-
-    let mut conflicts = false;
     let mut dirty = false;
-    for line in lines {
-        if line.len() < 2 {
-            continue;
-        }
-        let status = &line[..2];
-        if is_conflict_status(status) {
+    let mut conflicts = false;
+    for entry in statuses.iter() {
+        let s = entry.status();
+        if s.is_conflicted() {
             conflicts = true;
         } else {
-            // Any other porcelain line means the working tree or index changed.
             dirty = true;
         }
     }
+
+    // Ahead/behind upstream.
+    let (ahead, behind) = head
+        .shorthand()
+        .and_then(|name| {
+            let local = repo.find_branch(name, BranchType::Local).ok()?;
+            let upstream = local.upstream().ok()?;
+            let local_oid = head.target()?;
+            let upstream_oid = upstream.get().target()?;
+            repo.graph_ahead_behind(local_oid, upstream_oid).ok()
+        })
+        .unwrap_or((0, 0));
 
     let sync_status = if conflicts {
         GitSyncStatus::Conflicts
@@ -144,192 +131,108 @@ pub fn parse_git_status(output: &str) -> Option<GitStatus> {
     })
 }
 
-fn parse_branch_line(line: &str) -> (Option<String>, usize, usize) {
-    let rest = &line[3..];
-
-    // Detached HEAD, e.g. "## HEAD (no branch)"
-    if rest.starts_with("HEAD (") {
-        return (None, 0, 0);
-    }
-
-    // Branch with upstream, e.g. "main...origin/main [ahead 2, behind 1]"
-    if let Some((branch, upstream_with_status)) = rest.split_once("...") {
-        let branch = Some(branch.to_string());
-        let upstream = upstream_with_status.split_whitespace().next().unwrap_or("");
-        let status_text = upstream_with_status.strip_prefix(upstream).unwrap_or("");
-        let (ahead, behind) = parse_ahead_behind(status_text);
-        return (branch, ahead, behind);
-    }
-
-    // Branch without upstream, e.g. "## feature/no-upstream"
-    let branch = rest.split_whitespace().next().map(|s| s.to_string());
-    (branch, 0, 0)
-}
-
-fn parse_ahead_behind(text: &str) -> (usize, usize) {
-    let Some(start) = text.find('[') else {
-        return (0, 0);
-    };
-    let Some(end) = text.find(']') else {
-        return (0, 0);
-    };
-    let content = &text[start + 1..end];
-
-    let mut ahead = 0;
-    let mut behind = 0;
-
-    for part in content.split(',') {
-        let part = part.trim();
-        if let Some(n) = part.strip_prefix("ahead ") {
-            ahead = n.trim().parse().unwrap_or(0);
-        } else if let Some(n) = part.strip_prefix("behind ") {
-            behind = n.trim().parse().unwrap_or(0);
-        }
-    }
-
-    (ahead, behind)
-}
-
-/// Conflict codes reported by `git status --porcelain=v1` for unmerged entries.
-fn is_conflict_status(status: &str) -> bool {
-    matches!(
-        status,
-        "DD" | "AU" | "UD" | "UA" | "DU" | "AA" | "UU"
-    )
-}
-
-/// Simple time-based cache for Git statuses keyed by repository path.
-#[derive(Debug, Default)]
+/// Background-thread Git status cache.
+///
+/// The UI thread never blocks: [`get_or_refresh`](GitStatusCache::get_or_refresh)
+/// reads from a shared cache and registers unknown paths for the background
+/// thread to compute. The thread polls all known paths every `refresh_interval`
+/// using libgit2 (no external `git` process), so there are no `conhost.exe`
+/// window flashes on Windows.
 pub struct GitStatusCache {
-    entries: std::collections::HashMap<std::path::PathBuf, (GitStatus, Instant)>,
-    ttl: Duration,
+    cache: Arc<Mutex<HashMap<PathBuf, Option<GitStatus>>>>,
+    known_paths: Arc<Mutex<HashSet<PathBuf>>>,
+    shutdown: Arc<AtomicBool>,
+    _thread: Option<thread::JoinHandle<()>>,
 }
 
 impl GitStatusCache {
-    pub fn new(ttl: Duration) -> Self {
+    /// Create a new cache and spawn the background refresh thread.
+    /// `refresh_interval` controls how often the thread recomputes statuses.
+    pub fn new(refresh_interval: Duration) -> Self {
+        let cache: Arc<Mutex<HashMap<PathBuf, Option<GitStatus>>>> =
+            Arc::new(Mutex::new(HashMap::new()));
+        let known_paths: Arc<Mutex<HashSet<PathBuf>>> = Arc::new(Mutex::new(HashSet::new()));
+        let shutdown = Arc::new(AtomicBool::new(false));
+
+        let cache_clone = Arc::clone(&cache);
+        let paths_clone = Arc::clone(&known_paths);
+        let shutdown_clone = Arc::clone(&shutdown);
+
+        let handle = thread::Builder::new()
+            .name("git-status-watcher".into())
+            .spawn(move || {
+                while !shutdown_clone.load(Ordering::Relaxed) {
+                    let paths: Vec<PathBuf> =
+                        paths_clone.lock().unwrap().iter().cloned().collect();
+                    for path in &paths {
+                        if shutdown_clone.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        let status = compute_git_status(path);
+                        cache_clone
+                            .lock()
+                            .unwrap()
+                            .insert(path.clone(), status);
+                    }
+                    // Sleep in small increments so shutdown is responsive.
+                    let mut elapsed = Duration::ZERO;
+                    let step = Duration::from_millis(200);
+                    while elapsed < refresh_interval {
+                        if shutdown_clone.load(Ordering::Relaxed) {
+                            return;
+                        }
+                        thread::sleep(step);
+                        elapsed += step;
+                    }
+                }
+            })
+            .ok();
+
         Self {
-            entries: std::collections::HashMap::new(),
-            ttl,
+            cache,
+            known_paths,
+            shutdown,
+            _thread: handle,
         }
     }
 
-    /// Return the cached status for `path` if it exists and has not expired.
-    pub fn get(&self, path: &Path) -> Option<&GitStatus> {
-        self.entries
+    /// Return a cached status for `path`, registering it for background
+    /// refresh if not already known. Returns `None` if the path has not been
+    /// checked yet or is not a Git repository.
+    pub fn get_or_refresh(&self, path: &Path) -> Option<GitStatus> {
+        self.known_paths.lock().unwrap().insert(path.to_path_buf());
+        self.cache
+            .lock()
+            .unwrap()
             .get(path)
-            .filter(|(_, fetched)| fetched.elapsed() < self.ttl)
-            .map(|(status, _)| status)
+            .and_then(|opt| opt.clone())
     }
 
-    /// Force a refresh of `path` and store the result in the cache.
-    pub fn refresh(&mut self, path: &Path) -> Option<&GitStatus> {
-        let status = get_git_status(path);
-        if let Some(status) = status {
-            self.entries.insert(path.to_path_buf(), (status, Instant::now()));
-            self.entries.get(path).map(|(s, _)| s)
-        } else {
-            self.entries.remove(path);
-            None
-        }
-    }
-
-    /// Return a cached status, refreshing it only when missing or expired.
-    pub fn get_or_refresh(&mut self, path: &Path) -> Option<&GitStatus> {
-        if self.get(path).is_some() {
-            return self.get(path);
-        }
-        self.refresh(path)
-    }
-
-    /// Remove stale entries for paths that are no longer tracked.
+    /// Remove entries for paths that no longer satisfy `predicate`.
     pub fn retain<F>(&mut self, mut predicate: F)
     where
         F: FnMut(&Path) -> bool,
     {
-        self.entries.retain(|path, _| predicate(path));
+        self.cache.lock().unwrap().retain(|path, _| predicate(path));
+        self.known_paths
+            .lock()
+            .unwrap()
+            .retain(|path| predicate(path));
+    }
+}
+
+impl Drop for GitStatusCache {
+    fn drop(&mut self) {
+        self.shutdown.store(true, Ordering::Relaxed);
+        if let Some(handle) = self._thread.take() {
+            let _ = handle.join();
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-
-    #[test]
-    fn test_parse_clean_with_upstream() {
-        let output = "## main...origin/main\n";
-        let status = parse_git_status(output).unwrap();
-        assert_eq!(status.branch, Some("main".to_string()));
-        assert_eq!(status.sync_status, GitSyncStatus::Clean);
-    }
-
-    #[test]
-    fn test_parse_needs_push() {
-        let output = "## main...origin/main [ahead 3]\n M file.txt\n";
-        let status = parse_git_status(output).unwrap();
-        assert_eq!(status.branch, Some("main".to_string()));
-        assert_eq!(status.sync_status, GitSyncStatus::NeedsPush);
-    }
-
-    #[test]
-    fn test_parse_needs_pull() {
-        let output = "## main...origin/main [behind 5]\n";
-        let status = parse_git_status(output).unwrap();
-        assert_eq!(status.sync_status, GitSyncStatus::NeedsPull);
-    }
-
-    #[test]
-    fn test_parse_diverged() {
-        let output = "## main...origin/main [ahead 2, behind 4]\n";
-        let status = parse_git_status(output).unwrap();
-        assert_eq!(status.sync_status, GitSyncStatus::Diverged);
-    }
-
-    #[test]
-    fn test_parse_conflicts_take_precedence() {
-        // Even though the branch is ahead, conflicts must be reported.
-        let output = "## main...origin/main [ahead 1]\nUU conflict.txt\n";
-        let status = parse_git_status(output).unwrap();
-        assert_eq!(status.sync_status, GitSyncStatus::Conflicts);
-    }
-
-    #[test]
-    fn test_parse_various_conflict_codes() {
-        for code in ["UU", "AU", "UD", "UA", "DU", "AA", "DD"] {
-            let output = format!("## main...origin/main\n{} file.txt\n", code);
-            let status = parse_git_status(&output).unwrap();
-            assert_eq!(
-                status.sync_status,
-                GitSyncStatus::Conflicts,
-                "code {} should be treated as a conflict",
-                code
-            );
-        }
-    }
-
-    #[test]
-    fn test_parse_no_upstream() {
-        let output = "## feature/no-upstream\n";
-        let status = parse_git_status(output).unwrap();
-        assert_eq!(status.branch, Some("feature/no-upstream".to_string()));
-        assert_eq!(status.sync_status, GitSyncStatus::Clean);
-    }
-
-    #[test]
-    fn test_parse_dirty() {
-        let output = "## main...origin/main\n M file.txt\n?? untracked.txt\n";
-        let status = parse_git_status(output).unwrap();
-        assert_eq!(status.branch, Some("main".to_string()));
-        assert_eq!(status.sync_status, GitSyncStatus::Dirty);
-    }
-
-    #[test]
-    fn test_parse_detached_head() {
-        let output = "## HEAD (no branch)\n";
-        let status = parse_git_status(output).unwrap();
-        assert_eq!(status.branch, None);
-        assert_eq!(status.sync_status, GitSyncStatus::Clean);
-    }
 
     #[test]
     fn test_icons_and_labels() {
@@ -346,21 +249,6 @@ mod tests {
         assert_eq!(GitSyncStatus::NeedsPull.label(), "Needs pull");
         assert_eq!(GitSyncStatus::Diverged.label(), "Diverged");
         assert_eq!(GitSyncStatus::Conflicts.label(), "Merge conflicts");
-    }
-
-    #[test]
-    fn test_cache_refresh_and_ttl() {
-        let mut cache = GitStatusCache::new(Duration::from_secs(60));
-        // Empty cache returns nothing.
-        assert!(cache.get(Path::new("/nonexistent")).is_none());
-
-        // Parsing fixtures still works through the cache layer.
-        let fixture = "## main...origin/main [ahead 2]\n";
-        let status = parse_git_status(fixture).unwrap();
-        cache
-            .entries
-            .insert(PathBuf::from("/fixture"), (status, Instant::now()));
-        assert!(cache.get(Path::new("/fixture")).is_some());
     }
 
     fn git_available() -> bool {
@@ -381,7 +269,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_git_status_on_real_repo() {
+    fn test_compute_git_status_clean() {
         if !git_available() {
             return;
         }
@@ -397,13 +285,43 @@ mod tests {
         run_git(dir, &["add", "file.txt"]);
         run_git(dir, &["commit", "--quiet", "-m", "initial"]);
 
-        let status = get_git_status(dir).expect("should detect git repo");
-        assert_eq!(status.branch, Some("master".to_string()));
+        let status = compute_git_status(dir).expect("should detect git repo");
+        // Git >= 2.28 may default to "main" instead of "master".
+        assert!(
+            status.branch.as_deref() == Some("master")
+                || status.branch.as_deref() == Some("main"),
+            "unexpected branch: {:?}",
+            status.branch
+        );
         assert_eq!(status.sync_status, GitSyncStatus::Clean);
     }
 
     #[test]
-    fn test_get_git_status_conflicts() {
+    fn test_compute_git_status_dirty() {
+        if !git_available() {
+            return;
+        }
+
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+
+        run_git(dir, &["init", "--quiet"]);
+        run_git(dir, &["config", "user.email", "test@example.com"]);
+        run_git(dir, &["config", "user.name", "Test"]);
+
+        std::fs::write(dir.join("file.txt"), "hello").unwrap();
+        run_git(dir, &["add", "file.txt"]);
+        run_git(dir, &["commit", "--quiet", "-m", "initial"]);
+
+        // Modify the file without committing.
+        std::fs::write(dir.join("file.txt"), "modified").unwrap();
+
+        let status = compute_git_status(dir).expect("should detect git repo");
+        assert_eq!(status.sync_status, GitSyncStatus::Dirty);
+    }
+
+    #[test]
+    fn test_compute_git_status_conflicts() {
         if !git_available() {
             return;
         }
@@ -439,7 +357,42 @@ mod tests {
             .unwrap();
         assert!(!merge.success(), "merge should conflict in this test");
 
-        let git_status = get_git_status(dir).expect("should detect git repo");
+        let git_status = compute_git_status(dir).expect("should detect git repo");
         assert_eq!(git_status.sync_status, GitSyncStatus::Conflicts);
+    }
+
+    #[test]
+    fn test_compute_git_status_not_a_repo() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        assert!(compute_git_status(tmp.path()).is_none());
+    }
+
+    #[test]
+    fn test_cache_returns_status_after_refresh() {
+        if !git_available() {
+            return;
+        }
+
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+
+        run_git(dir, &["init", "--quiet"]);
+        run_git(dir, &["config", "user.email", "test@example.com"]);
+        run_git(dir, &["config", "user.name", "Test"]);
+        std::fs::write(dir.join("file.txt"), "hello").unwrap();
+        run_git(dir, &["add", "file.txt"]);
+        run_git(dir, &["commit", "--quiet", "-m", "initial"]);
+
+        let cache = GitStatusCache::new(Duration::from_millis(100));
+
+        // First call registers the path but the background thread hasn't
+        // computed the status yet.
+        assert!(cache.get_or_refresh(dir).is_none());
+
+        // Wait for the background thread to process it.
+        thread::sleep(Duration::from_millis(400));
+
+        let status = cache.get_or_refresh(dir).expect("should be cached");
+        assert_eq!(status.sync_status, GitSyncStatus::Clean);
     }
 }

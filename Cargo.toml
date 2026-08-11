@@ -1,6 +1,6 @@
 [package]
 name = "yaaa"
-version = "0.5.9"
+version = "0.5.10"
 edition = "2021"
 description = "YAAA byOrlov"
 authors = ["Oleg Orlov <orelcokolov@gmail.com>"]
@@ -26,6 +26,7 @@ image = "0.24"
 alacritty_terminal = "0.25.1"
 rust-fontconfig = "1.2.1"
 sysinfo = "0.33"
+git2 = { version = "0.19", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"

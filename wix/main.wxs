@@ -86,6 +86,7 @@
         <Property Id='DiskPrompt' Value='YAAA byOrlov Installation'/>
 
         <Directory Id='TARGETDIR' Name='SourceDir'>
+            <Directory Id='ProgramMenuFolder' Name='Programs'/>
             <Directory Id='$(var.PlatformProgramFilesFolder)' Name='PFiles'>
                 <Directory Id='APPLICATIONFOLDER' Name='yaaa'>
                     
@@ -126,7 +127,15 @@
                                 Name='yaaa.exe'
                                 DiskId='1'
                                 Source='$(var.CargoTargetBinDir)\yaaa.exe'
-                                KeyPath='yes'/>
+                                KeyPath='yes'>
+                                <Shortcut
+                                    Id='StartMenuShortcut'
+                                    Name='YAAA byOrlov'
+                                    Description='YAAA byOrlov'
+                                    Icon='ProductICO'
+                                    Directory='ProgramMenuFolder'
+                                    WorkingDirectory='Bin'/>
+                            </File>
                         </Component>
                     </Directory>
                 </Directory>
@@ -163,15 +172,13 @@
 
         <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
 
-        
         <!--
-          Uncomment the following `Icon` and `Property` tags to change the product icon.
-
           The product icon is the graphic that appears in the Add/Remove
-          Programs control panel for the application.
+          Programs control panel for the application, and is also attached to
+          the Start menu shortcut.
         -->
-        <!--<Icon Id='ProductICO' SourceFile='wix\Product.ico'/>-->
-        <!--<Property Id='ARPPRODUCTICON' Value='ProductICO' />-->
+        <Icon Id='ProductICO' SourceFile='assets\logo.ico'/>
+        <Property Id='ARPPRODUCTICON' Value='ProductICO'/>
 
         
         <!--

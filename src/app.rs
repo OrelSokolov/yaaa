@@ -108,7 +108,7 @@ impl App {
 
         let recent_projects = RecentProjects::load();
 
-        let git_cache = GitStatusCache::new(Duration::from_secs(60));
+        let git_cache = GitStatusCache::new(Duration::from_secs(5));
 
         let cached_terminal_theme = theme.build_terminal_theme();
 
