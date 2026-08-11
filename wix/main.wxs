@@ -127,15 +127,25 @@
                                 Name='yaaa.exe'
                                 DiskId='1'
                                 Source='$(var.CargoTargetBinDir)\yaaa.exe'
-                                KeyPath='yes'>
-                                <Shortcut
-                                    Id='StartMenuShortcut'
-                                    Name='YAAA byOrlov'
-                                    Description='YAAA byOrlov'
-                                    Icon='ProductICO'
-                                    Directory='ProgramMenuFolder'
-                                    WorkingDirectory='Bin'/>
-                            </File>
+                                KeyPath='yes'/>
+                        </Component>
+                        <Component Id='StartMenuShortcut' Guid='*'>
+                            <Shortcut
+                                Id='StartMenuShortcut'
+                                Name='YAAA byOrlov'
+                                Description='YAAA byOrlov'
+                                Target='[Bin]yaaa.exe'
+                                Icon='ProductICO'
+                                Directory='ProgramMenuFolder'
+                                WorkingDirectory='Bin'/>
+                            <RegistryValue
+                                Id='StartMenuShortcutReg'
+                                Root='HKCU'
+                                Key='Software\Oleg Orlov\YAAA byOrlov'
+                                Name='StartMenuShortcut'
+                                Type='string'
+                                Value='1'
+                                KeyPath='yes'/>
                         </Component>
                     </Directory>
                 </Directory>
@@ -159,6 +169,7 @@
             <!--<ComponentRef Id='License'/>-->
 
             <ComponentRef Id='binary0'/>
+            <ComponentRef Id='StartMenuShortcut'/>
 
             <Feature
                 Id='Environment'
