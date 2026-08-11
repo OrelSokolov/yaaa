@@ -73,6 +73,7 @@ pub fn show_left_panel(
             })
             .show_inside(ui, |ui| {
                 egui::ScrollArea::vertical()
+                    .id_salt("left_panel_scroll")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         ui.style_mut().spacing.interact_size = egui::vec2(120.0, 24.0);

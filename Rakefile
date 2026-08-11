@@ -270,6 +270,22 @@ task :run do
 
   binary = windows? ? "target/debug/#{PACKAGE_NAME}.exe" : "target/debug/#{PACKAGE_NAME}"
 
-  puts "Running #{binary}..."
-  sh binary
+  # Surface renderer selection + diagnostic logging in the terminal so the
+  # active mode is visible without a separate env setup. RUST_LOG=info is
+  # required because the app uses env_logger; RUST_BACKTRACE=1 makes any panic
+  # (e.g. in a PTY thread) print a useful trace instead of a bare message.
+  rust_log = ENV.fetch('RUST_LOG', 'info')
+  rust_backtrace = ENV.fetch('RUST_BACKTRACE', '1')
+  yaaa_renderer = ENV.fetch('YAAA_RENDERER', '')
+
+  env = {}
+  env['RUST_LOG'] = rust_log unless rust_log.empty?
+  env['RUST_BACKTRACE'] = rust_backtrace unless rust_backtrace.empty?
+  env['YAAA_RENDERER'] = yaaa_renderer unless yaaa_renderer.empty?
+
+  env_str = env.map { |k, v| "#{k}=#{v}" }.join(' ')
+  cmd = env_str.empty? ? binary : "#{env_str} #{binary}"
+
+  puts "Running #{cmd}..."
+  sh cmd
 end
