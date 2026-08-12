@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.11] - 2026-08-12
+
+### Fixed
+- Fix Windows terminal backspace bug: typing 4+ chars in cmd.exe and pressing Backspace appeared to clear the whole line and freeze the cursor. Root cause was `egui_term` sending DEL (`\x7f`) instead of BS (`\x08`) on Windows — cmd.exe under ConPTY expects `^H` for its cooked line editor. Bumped `egui_term` to a rev that makes the Backspace byte platform-dependent.
+
 ## [0.5.8] - 2026-08-02
 
 ### Fixed
