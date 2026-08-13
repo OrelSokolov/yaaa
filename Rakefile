@@ -227,6 +227,23 @@ namespace :build do
     puts "Done: #{dmg_path}"
   end
 
+  desc 'Cross-compile Windows .exe from Linux/macOS'
+  task :windows do
+    target = 'x86_64-pc-windows-gnu'
+    ensure_rust_target(target)
+
+    puts "Cross-compiling release .exe for #{target}..."
+    sh 'cargo', 'build', '--release', '--target', target
+
+    exe_path = "target/#{target}/release/#{PACKAGE_NAME}.exe"
+    out_path = "target/release/#{PACKAGE_NAME}-#{VERSION}-windows-x86_64.exe"
+
+    FileUtils.mkdir_p('target/release')
+    FileUtils.cp(exe_path, out_path)
+
+    puts "Done: #{out_path}"
+  end
+
   desc 'Build Windows MSI (Windows only)'
   task :msi do
     unless windows?
