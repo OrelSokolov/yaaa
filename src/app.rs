@@ -42,6 +42,9 @@ pub struct App {
     last_terminal_cell_metrics: Option<[f32; 2]>,
     /// Deadline to flush `last_terminal_layout` to disk (debounced during resize).
     terminal_layout_save_at: Option<std::time::Instant>,
+    /// Result channel of a folder picker opened on a background thread, so the
+    /// UI keeps rendering while the native dialog is shown.
+    folder_pick: Option<Receiver<Option<std::path::PathBuf>>>,
 }
 
 fn setup_visuals(ctx: &egui::Context, theme: &AppTheme) {
@@ -135,6 +138,7 @@ impl App {
             last_terminal_layout: settings.last_terminal_layout,
             last_terminal_cell_metrics: settings.last_terminal_cell_metrics,
             terminal_layout_save_at: None,
+            folder_pick: None,
         }
     }
 
@@ -160,6 +164,46 @@ impl App {
 
     fn save_recent_projects(&self) {
         self.recent_projects.save();
+    }
+
+    /// Open the native folder picker on a background thread so the UI thread
+    /// (and the terminal PTYs) keep running while the dialog is shown.
+    /// The result is polled every frame by `poll_folder_pick`.
+    fn spawn_folder_pick(&mut self, ctx: &egui::Context) {
+        if self.folder_pick.is_some() {
+            return; // a picker is already open
+        }
+        let (tx, rx) = mpsc::channel();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let picked = rfd::FileDialog::new().pick_folder();
+            let _ = tx.send(picked);
+            // Wake the UI thread so the result is applied immediately.
+            ctx.request_repaint();
+        });
+        self.folder_pick = Some(rx);
+    }
+
+    fn poll_folder_pick(&mut self, ctx: &egui::Context) {
+        let Some(rx) = &self.folder_pick else { return };
+        match rx.try_recv() {
+            Ok(Some(path)) => {
+                self.folder_pick = None;
+                self.add_project_from_path(ctx, path);
+            }
+            Ok(None) => self.folder_pick = None,
+            Err(mpsc::TryRecvError::Empty) => {}
+            Err(mpsc::TryRecvError::Disconnected) => self.folder_pick = None,
+        }
+    }
+
+    fn add_project_from_path(&mut self, ctx: &egui::Context, path: std::path::PathBuf) {
+        let name = crate::terminal::manager::TabGroup::name_from_path(&path);
+        self.recent_projects.add_project(name.clone(), path.clone());
+        self.save_recent_projects();
+        self.tab_manager
+            .add_group_with_path(ctx.clone(), Some(path));
+        self.tab_manager.save_groups();
     }
 
     fn handle_command_events(&mut self) {
@@ -261,14 +305,7 @@ impl App {
         actions: PanelActions,
     ) {
         if actions.add_group_clicked {
-            if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                let name = crate::terminal::manager::TabGroup::name_from_path(&path);
-                self.recent_projects.add_project(name.clone(), path.clone());
-                self.save_recent_projects();
-                self.tab_manager
-                    .add_group_with_path(ctx.clone(), Some(path));
-                self.tab_manager.save_groups();
-            }
+            self.spawn_folder_pick(ctx);
         }
 
         if let Some(group_id) = actions.add_tab_to_group {
@@ -481,18 +518,7 @@ impl eframe::App for App {
                                 apply_menu_style(ui, theme.fonts.ui_font_size);
 
                                 if ui.button("➕ Add project").clicked() {
-                                    if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                                        let name =
-                                            crate::terminal::manager::TabGroup::name_from_path(
-                                                &path,
-                                            );
-                                        self.recent_projects
-                                            .add_project(name.clone(), path.clone());
-                                        self.save_recent_projects();
-                                        self.tab_manager
-                                            .add_group_with_path(ctx.clone(), Some(path));
-                                        self.tab_manager.save_groups();
-                                    }
+                                    self.spawn_folder_pick(&ctx);
                                     ui.close();
                                 }
 
@@ -701,6 +727,8 @@ impl eframe::App for App {
         self.handle_command_events();
 
         self.handle_panel_actions(&ctx, panel_actions);
+
+        self.poll_folder_pick(&ctx);
 
         if window_actions.close_confirmed {
             self.tab_manager.clear();
