@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.12] - 2026-08-20
+
+### Fixed
+- Fix UI freeze while the native "Add project" folder picker was open. `pick_folder()` ran synchronously on the render thread, pausing the UI and all terminal output until the dialog closed. The dialog now runs on a background thread; the picked folder is delivered via a channel polled each frame and applied immediately via `request_repaint()`.
+
 ## [0.5.11] - 2026-08-12
 
 ### Fixed
