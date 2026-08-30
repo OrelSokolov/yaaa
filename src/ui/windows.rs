@@ -13,6 +13,8 @@ pub struct WindowManager {
     pub show_font_settings: bool,
     pub show_rename_group: bool,
     pub show_close_confirmation: bool,
+    pub show_missing_folder: bool,
+    pub missing_folder_message: String,
     pub rename_group_id: Option<u64>,
     pub rename_group_name: String,
     pub editing_default_shell_cmd: String,
@@ -71,6 +73,8 @@ impl WindowManager {
             show_font_settings: false,
             show_rename_group: false,
             show_close_confirmation: false,
+            show_missing_folder: false,
+            missing_folder_message: String::new(),
             rename_group_id: None,
             rename_group_name: String::new(),
             editing_default_shell_cmd,
@@ -106,6 +110,7 @@ impl WindowManager {
         self.show_theme_settings_window(ctx, &mut actions);
         self.show_font_settings_window(ctx, &mut actions);
         self.show_close_confirmation_window(ctx, &mut actions);
+        self.show_missing_folder_window(ctx);
 
         actions
     }
@@ -666,6 +671,40 @@ impl WindowManager {
         self.rename_group_id = Some(group_id);
         self.rename_group_name = name;
         self.show_rename_group = true;
+    }
+
+    pub fn missing_folder(&mut self, message: String) {
+        self.missing_folder_message = message;
+        self.show_missing_folder = true;
+    }
+
+    fn show_missing_folder_window(&mut self, ctx: &egui::Context) {
+        let mut ok = false;
+
+        egui::Window::new("Folder not found")
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut self.show_missing_folder)
+            .show(ctx, |ui| {
+                egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
+                    ui.heading("Folder not found");
+                    ui.add_space(10.0);
+                    ui.label(&self.missing_folder_message);
+                    ui.add_space(6.0);
+                    ui.label("The project has been removed from the projects list.");
+                    ui.add_space(15.0);
+                    if ui
+                        .add(egui::Button::new("OK").min_size(egui::vec2(80.0, 32.0)))
+                        .clicked()
+                        || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                    {
+                        ok = true;
+                    }
+                });
+            });
+
+        if ok {
+            self.show_missing_folder = false;
+        }
     }
 
     fn show_close_confirmation_window(&mut self, ctx: &egui::Context, actions: &mut WindowActions) {

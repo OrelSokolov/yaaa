@@ -46,4 +46,8 @@ impl RecentProjects {
             self.projects.truncate(20);
         }
     }
+
+    pub fn remove_project(&mut self, path: &PathBuf) {
+        self.projects.retain(|p| &p.path != path);
+    }
 }

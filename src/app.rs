@@ -536,16 +536,29 @@ impl eframe::App for App {
                                     .projects
                                     .iter()
                                     .filter(|p| !opened_paths.contains(&p.path))
+                                    .cloned()
                                     .collect();
 
                                 if !recent_projects.is_empty() {
                                     for project in recent_projects {
                                         if ui.button(&project.name).clicked() {
-                                            self.tab_manager.add_group_with_path(
-                                                ctx.clone(),
-                                                Some(project.path.clone()),
-                                            );
-                                            self.tab_manager.save_groups();
+                                            let name = project.name.clone();
+                                            let path = project.path.clone();
+                                            if path.exists() {
+                                                self.tab_manager.add_group_with_path(
+                                                    ctx.clone(),
+                                                    Some(path),
+                                                );
+                                                self.tab_manager.save_groups();
+                                            } else {
+                                                self.recent_projects.remove_project(&path);
+                                                self.save_recent_projects();
+                                                self.window_manager.missing_folder(format!(
+                                                    "{}\n{}",
+                                                    name,
+                                                    path.display()
+                                                ));
+                                            }
                                             ui.close();
                                         }
                                     }
