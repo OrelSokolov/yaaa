@@ -65,5 +65,5 @@ assets = [
     ["debian/icons/64.png", "/usr/share/icons/hicolor/64x64/apps/h2term.png", "644"],
     ["debian/icons/128.png", "/usr/share/icons/hicolor/128x128/apps/h2term.png", "644"],
     ["debian/icons/256.png", "/usr/share/icons/hicolor/256x256/apps/h2term.png", "644"],
-    ["debian/postinst", "/DEBIAN/postinst", "755"],
 ]
+maintainer-scripts = "debian"
