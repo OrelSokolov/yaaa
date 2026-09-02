@@ -16,7 +16,7 @@ jobs:
             artifact_name: '*.deb'
             artifact_path: target/debian
           - os: macos-latest
-            artifact_name: 'yaaa-macos'
+            artifact_name: 'h2term-macos'
             artifact_path: target/release
           - os: windows-latest
             artifact_name: '*.msi'

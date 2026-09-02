@@ -1,8 +1,8 @@
-# YAAA byOrlov — Features
+# H2Term byOrlov — Features
 
 ## Brief
 
-**YAAA byOrlov — a fast, lightweight terminal that lets you run multiple AI coding agents side by side across all your projects.**
+**H2Term byOrlov — a fast, lightweight terminal that lets you run multiple AI coding agents side by side across all your projects.**
 
 ---
 

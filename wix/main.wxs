@@ -60,7 +60,7 @@
 
     <Product
         Id='*'
-        Name='YAAA byOrlov'
+        Name='H2Term byOrlov'
         UpgradeCode='E42C30AE-2D54-40C5-9A52-5F3C9CBDC7DE'
         Manufacturer='Oleg Orlov'
         Language='1033'
@@ -69,7 +69,7 @@
 
         <Package Id='*'
             Keywords='Installer'
-            Description='YAAA byOrlov'
+            Description='H2Term byOrlov'
             Manufacturer='Oleg Orlov'
             InstallerVersion='450'
             Languages='1033'
@@ -83,12 +83,12 @@
             DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
 
         <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
-        <Property Id='DiskPrompt' Value='YAAA byOrlov Installation'/>
+        <Property Id='DiskPrompt' Value='H2Term byOrlov Installation'/>
 
         <Directory Id='TARGETDIR' Name='SourceDir'>
             <Directory Id='ProgramMenuFolder' Name='Programs'/>
             <Directory Id='$(var.PlatformProgramFilesFolder)' Name='PFiles'>
-                <Directory Id='APPLICATIONFOLDER' Name='yaaa'>
+                <Directory Id='APPLICATIONFOLDER' Name='h2term'>
                     
                     <!--
                       Enabling the license sidecar file in the installer is a four step process:
@@ -124,24 +124,24 @@
                         <Component Id='binary0' Guid='*'>
                             <File
                                 Id='exe0'
-                                Name='yaaa.exe'
+                                Name='h2term.exe'
                                 DiskId='1'
-                                Source='$(var.CargoTargetBinDir)\yaaa.exe'
+                                Source='$(var.CargoTargetBinDir)\h2term.exe'
                                 KeyPath='yes'/>
                         </Component>
                         <Component Id='StartMenuShortcut' Guid='*'>
                             <Shortcut
                                 Id='StartMenuShortcut'
-                                Name='YAAA byOrlov'
-                                Description='YAAA byOrlov'
-                                Target='[Bin]yaaa.exe'
+                                Name='H2Term byOrlov'
+                                Description='H2Term byOrlov'
+                                Target='[Bin]h2term.exe'
                                 Icon='ProductICO'
                                 Directory='ProgramMenuFolder'
                                 WorkingDirectory='Bin'/>
                             <RegistryValue
                                 Id='StartMenuShortcutReg'
                                 Root='HKCU'
-                                Key='Software\Oleg Orlov\YAAA byOrlov'
+                                Key='Software\Oleg Orlov\H2Term byOrlov'
                                 Name='StartMenuShortcut'
                                 Type='string'
                                 Value='1'

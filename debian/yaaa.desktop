@@ -1,9 +1,0 @@
-[Desktop Entry]
-Name=YAAA byOrlov
-Comment=YAAA byOrlov
-Exec=/usr/bin/yaaa
-Icon=yaaa
-Type=Application
-Categories=TerminalEmulator;System;
-Terminal=false
-StartupWMClass=yaaa

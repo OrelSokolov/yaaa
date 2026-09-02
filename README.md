@@ -2,7 +2,7 @@
   <img src="./assets/logo-readme.png" alt="Logo" width="200" />
 </p>
 
-# YAAA byOrlov
+# H2Term byOrlov
 
 Actually this is just fast and light terminal manager for another coding agents.
 
@@ -12,10 +12,10 @@ Actually this is just fast and light terminal manager for another coding agents.
 
 ### macOS
 
-The easiest way to install YAAA byOrlov on macOS is with the Ruby installer. It downloads the release binary, builds a local `.app` bundle and signs it ad-hoc, so Gatekeeper does not block it:
+The easiest way to install H2Term byOrlov on macOS is with the Ruby installer. It downloads the release binary, builds a local `.app` bundle and signs it ad-hoc, so Gatekeeper does not block it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OrelSokolov/yaaa/master/install.rb | ruby
+curl -fsSL https://raw.githubusercontent.com/ByOrlov/h2term/master/install.rb | ruby
 ```
 
 Requires Ruby 2.6 or later (macOS ships with Ruby by default).
@@ -23,13 +23,13 @@ Requires Ruby 2.6 or later (macOS ships with Ruby by default).
 To install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OrelSokolov/yaaa/master/install.rb | YAAA_VERSION=v0.4.5 ruby
+curl -fsSL https://raw.githubusercontent.com/ByOrlov/h2term/master/install.rb | H2TERM_VERSION=v0.4.5 ruby
 ```
 
 To install to a custom directory (default is `/Applications`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OrelSokolov/yaaa/master/install.rb | YAAA_INSTALL=~/Applications ruby
+curl -fsSL https://raw.githubusercontent.com/ByOrlov/h2term/master/install.rb | H2TERM_INSTALL=~/Applications ruby
 ```
 
 ## Development

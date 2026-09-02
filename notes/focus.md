@@ -1,7 +1,7 @@
 # Focus Management
 
 ## Overview
-This document describes how focus management works in the YAAA byOrlov application, particularly for the settings window.
+This document describes how focus management works in the H2Term byOrlov application, particularly for the settings window.
 
 ## Settings Window Focus
 

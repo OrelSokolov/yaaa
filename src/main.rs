@@ -50,26 +50,26 @@ fn main() -> eframe::Result {
 
 /// Decide which renderer to boot, honoring an explicit override first.
 ///
-/// `YAAA_RENDERER=glow|wgpu` forces a choice. In `auto` mode (the default) we
+/// `H2TERM_RENDERER=glow|wgpu` forces a choice. In `auto` mode (the default) we
 /// prefer Glow on Linux under a Wayland session to avoid the wgpu/EGL hangs
 /// documented above; on every other platform we prefer wgpu.
 fn select_renderer() -> eframe::Renderer {
-    match std::env::var("YAAA_RENDERER")
+    match std::env::var("H2TERM_RENDERER")
         .ok()
         .map(|v| v.trim().to_lowercase())
         .as_deref()
     {
         Some("glow") => {
-            log::info!("Renderer: Glow (forced by YAAA_RENDERER=glow)");
+            log::info!("Renderer: Glow (forced by H2TERM_RENDERER=glow)");
             return eframe::Renderer::Glow;
         }
         Some("wgpu") => {
-            log::info!("Renderer: wgpu (forced by YAAA_RENDERER=wgpu)");
+            log::info!("Renderer: wgpu (forced by H2TERM_RENDERER=wgpu)");
             return eframe::Renderer::Wgpu;
         }
         Some(other) => {
             log::warn!(
-                "Unknown YAAA_RENDERER={other:?}, falling back to auto detection"
+                "Unknown H2TERM_RENDERER={other:?}, falling back to auto detection"
             );
         }
         None => {}
@@ -83,7 +83,7 @@ fn select_renderer() -> eframe::Renderer {
             log::warn!(
                 "Linux + Wayland session detected: defaulting to the Glow renderer to avoid \
                  known wgpu/eglSwapBuffers hangs on NVIDIA 595.x and the winit Wayland event-loop \
-                 freeze. Set YAAA_RENDERER=wgpu to force wgpu, or run under X11 \
+                 freeze. Set H2TERM_RENDERER=wgpu to force wgpu, or run under X11 \
                  (XDG_SESSION_TYPE=x11 / XWayland)."
             );
             return eframe::Renderer::Glow;
@@ -121,8 +121,8 @@ fn try_run(renderer: eframe::Renderer, icon: IconData) -> eframe::Result {
     let viewport = egui::ViewportBuilder::default()
         .with_inner_size([400.0, 300.0])
         .with_min_inner_size([300.0, 220.0])
-        .with_title("YAAA byOrlov")
-        .with_app_id("yaaa")
+        .with_title("H2Term byOrlov")
+        .with_app_id("h2term")
         .with_icon(icon)
         .with_transparent(true)
         .with_has_shadow(false);
@@ -134,7 +134,7 @@ fn try_run(renderer: eframe::Renderer, icon: IconData) -> eframe::Result {
     };
 
     eframe::run_native(
-        "YAAA byOrlov",
+        "H2Term byOrlov",
         native_options,
         Box::new(|cc| Ok(Box::new(app::App::new(cc)))),
     )

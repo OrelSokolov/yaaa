@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=H2Term byOrlov
+Comment=H2Term byOrlov
+Exec=/usr/bin/h2term
+Icon=h2term
+Type=Application
+Categories=TerminalEmulator;System;
+Terminal=false
+StartupWMClass=h2term

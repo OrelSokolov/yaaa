@@ -1,8 +1,8 @@
 [package]
-name = "yaaa"
+name = "h2term"
 version = "0.5.12"
 edition = "2021"
-description = "YAAA byOrlov"
+description = "H2Term byOrlov"
 authors = ["Oleg Orlov <orelcokolov@gmail.com>"]
 license = "MIT"
 
@@ -46,24 +46,24 @@ license = false
 icon-path = "assets/logo.ico"
 
 [package.metadata.deb]
-name = "yaaa"
+name = "h2term"
 maintainer = "Oleg Orlov <orelcokolov@gmail.com>"
 revision = ""
 copyright = "Copyright (C) 2025 Oleg Orlov."
 extended-description = """\
-Multi-Agent Terminal - YAAA byOrlov - \
+Multi-Agent Terminal - H2Term byOrlov - \
 Terminal application with AI agent support.
 """
 section = "utils"
 priority = "optional"
 assets = [
-    ["target/release/yaaa", "/usr/bin/yaaa", "755"],
-    ["debian/yaaa.desktop", "/usr/share/applications/yaaa.desktop", "644"],
-    ["debian/icons/16.png", "/usr/share/icons/hicolor/16x16/apps/yaaa.png", "644"],
-    ["debian/icons/32.png", "/usr/share/icons/hicolor/32x32/apps/yaaa.png", "644"],
-    ["debian/icons/48.png", "/usr/share/icons/hicolor/48x48/apps/yaaa.png", "644"],
-    ["debian/icons/64.png", "/usr/share/icons/hicolor/64x64/apps/yaaa.png", "644"],
-    ["debian/icons/128.png", "/usr/share/icons/hicolor/128x128/apps/yaaa.png", "644"],
-    ["debian/icons/256.png", "/usr/share/icons/hicolor/256x256/apps/yaaa.png", "644"],
+    ["target/release/h2term", "/usr/bin/h2term", "755"],
+    ["debian/h2term.desktop", "/usr/share/applications/h2term.desktop", "644"],
+    ["debian/icons/16.png", "/usr/share/icons/hicolor/16x16/apps/h2term.png", "644"],
+    ["debian/icons/32.png", "/usr/share/icons/hicolor/32x32/apps/h2term.png", "644"],
+    ["debian/icons/48.png", "/usr/share/icons/hicolor/48x48/apps/h2term.png", "644"],
+    ["debian/icons/64.png", "/usr/share/icons/hicolor/64x64/apps/h2term.png", "644"],
+    ["debian/icons/128.png", "/usr/share/icons/hicolor/128x128/apps/h2term.png", "644"],
+    ["debian/icons/256.png", "/usr/share/icons/hicolor/256x256/apps/h2term.png", "644"],
     ["debian/postinst", "/DEBIAN/postinst", "755"],
 ]

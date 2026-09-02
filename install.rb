@@ -1,28 +1,28 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# macOS installer for YAAA byOrlov.
+# macOS installer for H2Term byOrlov.
 # Downloads the universal binary from GitHub releases, builds a local .app
 # bundle and signs it ad-hoc. Because the file is created on the user's
 # machine, Gatekeeper does not treat it as a downloaded/quarantined file.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/OrelSokolov/yaaa/master/install.rb | ruby
+#   curl -fsSL https://raw.githubusercontent.com/ByOrlov/h2term/master/install.rb | ruby
 #
 # Optional environment variables:
-#   YAAA_VERSION   - release tag, e.g. "v0.4.3" (default: latest)
-#   YAAA_INSTALL   - install directory (default: /Applications)
+#   H2TERM_VERSION   - release tag, e.g. "v0.4.3" (default: latest)
+#   H2TERM_INSTALL   - install directory (default: /Applications)
 
 require 'open-uri'
 require 'fileutils'
 require 'tmpdir'
 require 'rbconfig'
 
-PACKAGE_NAME     = 'yaaa'
-APP_NAME         = 'YAAA byOrlov'
-BUNDLE_ID        = 'com.orelsokolov.yaaa'
-GITHUB_USER      = 'OrelSokolov'
-GITHUB_REPO      = 'yaaa'
+PACKAGE_NAME     = 'h2term'
+APP_NAME         = 'H2Term byOrlov'
+BUNDLE_ID        = 'com.orelsokolov.h2term'
+GITHUB_USER      = 'ByOrlov'
+GITHUB_REPO      = 'h2term'
 DEFAULT_INSTALL  = '/Applications'
 MIN_MACOS_VER    = '10.15'
 
@@ -38,11 +38,11 @@ def macos?
 end
 
 def version
-  ENV.fetch('YAAA_VERSION', 'latest')
+  ENV.fetch('H2TERM_VERSION', 'latest')
 end
 
 def install_dir
-  ENV.fetch('YAAA_INSTALL', DEFAULT_INSTALL)
+  ENV.fetch('H2TERM_INSTALL', DEFAULT_INSTALL)
 end
 
 def binary_url
@@ -148,7 +148,7 @@ def install
 
   puts "Installing #{APP_NAME} (#{version == 'latest' ? 'latest release' : version})..."
 
-  Dir.mktmpdir('yaaa-install-') do |temp_dir|
+  Dir.mktmpdir('h2term-install-') do |temp_dir|
     binary_path = File.join(temp_dir, PACKAGE_NAME)
 
     puts "Downloading #{binary_url}..."

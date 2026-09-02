@@ -1,6 +1,6 @@
 require 'yaml'
 
-PACKAGE_NAME = 'yaaa'
+PACKAGE_NAME = 'h2term'
 VERSION = File.read('Cargo.toml').match(/^version\s*=\s*"([^"]+)"/)[1]
 ARCH = 'amd64'
 
@@ -73,7 +73,7 @@ namespace :build do
     build_universal_binary
 
     puts "Copying universal binary to #{binary_path}..."
-    FileUtils.cp('target/release/yaaa', binary_path)
+    FileUtils.cp('target/release/h2term', binary_path)
     FileUtils.chmod(0755, binary_path)
 
     puts "Done: #{binary_path}"
@@ -86,7 +86,7 @@ namespace :build do
       exit 1
     end
 
-    app_name = 'YAAA byOrlov'
+    app_name = 'H2Term byOrlov'
     app_bundle = "target/release/#{app_name}.app"
     macos_dir = "#{app_bundle}/Contents/MacOS"
     resources_dir = "#{app_bundle}/Contents/Resources"
@@ -103,7 +103,7 @@ namespace :build do
     FileUtils.mkdir_p(macos_dir)
     FileUtils.mkdir_p(resources_dir)
 
-    FileUtils.cp('target/release/yaaa', "#{macos_dir}/#{PACKAGE_NAME}")
+    FileUtils.cp('target/release/h2term', "#{macos_dir}/#{PACKAGE_NAME}")
     FileUtils.cp('assets/logo.png', "#{resources_dir}/logo.png") if File.exist?('assets/logo.png')
     FileUtils.cp('assets/logo.icns', "#{resources_dir}/logo.icns") if File.exist?('assets/logo.icns')
 
@@ -117,7 +117,7 @@ namespace :build do
         <key>CFBundleDisplayName</key>
         <string>#{app_name}</string>
         <key>CFBundleIdentifier</key>
-        <string>com.orelsokolov.yaaa</string>
+        <string>com.orelsokolov.h2term</string>
         <key>CFBundleVersion</key>
         <string>#{VERSION}</string>
         <key>CFBundleShortVersionString</key>
@@ -145,7 +145,7 @@ namespace :build do
     FileUtils.rm_f(dmg_path)
     FileUtils.rm_f("#{temp_dmg}.dmg")
 
-    Dir.glob('/Volumes/Yaaa*').each do |old_volume|
+    Dir.glob('/Volumes/H2Term*').each do |old_volume|
       puts "Detaching previously mounted #{old_volume}..."
       system("hdiutil detach '#{old_volume}' >/dev/null 2>&1")
     end
@@ -171,9 +171,9 @@ namespace :build do
 
       volume_app = File.join(volume_path, "#{app_name}.app")
       if system("codesign --force --deep --sign - '#{volume_app}' >/dev/null 2>&1")
-        puts '  Signed Yaaa.app in DMG'
+        puts '  Signed H2Term.app in DMG'
       else
-        puts '  Warning: failed to sign Yaaa.app in DMG'
+        puts '  Warning: failed to sign H2Term.app in DMG'
       end
 
       puts 'Creating Applications symlink...'
@@ -293,12 +293,12 @@ task :run do
   # (e.g. in a PTY thread) print a useful trace instead of a bare message.
   rust_log = ENV.fetch('RUST_LOG', 'info')
   rust_backtrace = ENV.fetch('RUST_BACKTRACE', '1')
-  yaaa_renderer = ENV.fetch('YAAA_RENDERER', '')
+  h2term_renderer = ENV.fetch('H2TERM_RENDERER', '')
 
   env = {}
   env['RUST_LOG'] = rust_log unless rust_log.empty?
   env['RUST_BACKTRACE'] = rust_backtrace unless rust_backtrace.empty?
-  env['YAAA_RENDERER'] = yaaa_renderer unless yaaa_renderer.empty?
+  env['H2TERM_RENDERER'] = h2term_renderer unless h2term_renderer.empty?
 
   env_str = env.map { |k, v| "#{k}=#{v}" }.join(' ')
   cmd = env_str.empty? ? binary : "#{env_str} #{binary}"

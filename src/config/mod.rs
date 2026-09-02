@@ -8,7 +8,7 @@ pub use settings::Settings;
 
 pub fn config_dir() -> Option<PathBuf> {
     dirs::config_dir().map(|mut path| {
-        path.push("yaaa");
+        path.push("h2term");
         let _ = std::fs::create_dir_all(&path);
         path
     })
