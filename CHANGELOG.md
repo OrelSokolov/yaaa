@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Fuzzy project finder (Ctrl+Shift+O): a Sublime-style palette over the recent projects list with a big search field, live fuzzy matching (name or path), highlighted matched characters, and keyboard navigation (Up/Down to select, Enter to open, Escape to close).
+
 ## [0.5.12] - 2026-08-20
 
 ### Fixed

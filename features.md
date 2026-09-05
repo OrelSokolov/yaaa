@@ -48,6 +48,7 @@ Works on macOS, Linux, and Windows with one-click install.
 ### Project Management
 - "My Projects" sidebar with folder-based groups
 - Recent projects menu for quick re-opening
+- Fuzzy project finder (Ctrl+Shift+O) with live search and keyboard navigation
 - Group renaming
 - Automatic session persistence (groups.json)
 - Native folder picker for adding projects

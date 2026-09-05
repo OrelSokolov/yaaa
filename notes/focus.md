@@ -91,7 +91,9 @@ When the settings window is open:
 
 ## Related Windows
 
-The same focus mechanism is also used for the "Rename Group" window (`self.show_rename_group`), ensuring consistent behavior across modal windows.
+The same focus mechanism is also used for the "Rename Group" window (`self.show_rename_group`) and the other settings windows, ensuring consistent behavior across modal windows.
+
+The fuzzy project finder (Ctrl+Shift+O) blocks terminal focus the same way: `show_central_panel` receives a `block_terminal_focus` flag (`App::project_finder.is_open`) and passes `set_focus(false)` while the finder is open.
 
 ## State Variables
 

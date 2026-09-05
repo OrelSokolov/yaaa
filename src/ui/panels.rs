@@ -448,6 +448,7 @@ pub fn show_central_panel(
     ui: &mut egui::Ui,
     tab_manager: &mut TabManager,
     window_manager: &super::windows::WindowManager,
+    block_terminal_focus: bool,
     theme: &AppTheme,
     terminal_theme: &egui_term::TerminalTheme,
     terminal_font: &egui_term::TerminalFont,
@@ -509,6 +510,7 @@ pub fn show_central_panel(
                                     && !window_manager.show_agents_settings
                                     && !window_manager.show_theme_settings
                                     && !window_manager.show_font_settings
+                                    && !block_terminal_focus
                                     && !should_block_input
                                     && !tab.search_active,
                             )

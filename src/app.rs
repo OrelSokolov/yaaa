@@ -7,7 +7,7 @@ use crate::terminal::TabManager;
 use crate::theme::AppTheme;
 use crate::ui::{
     show_central_panel, show_debug_panel, show_left_panel, show_search_panel, GroupAction,
-    PanelActions, WindowActions, WindowManager,
+    PanelActions, ProjectFinder, WindowActions, WindowManager,
 };
 use egui_term::BackendCommand;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -18,6 +18,7 @@ pub struct App {
     command_receiver: Receiver<(u64, egui_term::PtyEvent)>,
     tab_manager: TabManager,
     window_manager: WindowManager,
+    project_finder: ProjectFinder,
     recent_projects: RecentProjects,
     egui_ctx: egui::Context,
     pub show_terminal_lines: bool,
@@ -120,6 +121,7 @@ impl App {
             command_receiver,
             tab_manager,
             window_manager,
+            project_finder: ProjectFinder::new(),
             recent_projects,
             egui_ctx: cc.egui_ctx.clone(),
             show_terminal_lines: settings.show_terminal_lines,
@@ -290,6 +292,10 @@ impl App {
                     tab.search_just_opened = true;
                 }
             }
+        }
+
+        if events.open_project_finder {
+            self.project_finder.open();
         }
 
         (
@@ -715,6 +721,36 @@ impl eframe::App for App {
 
         let window_actions = self.window_manager.show(&ctx);
 
+        // Fuzzy project finder (Ctrl+Shift+O). Same list as the Projects menu:
+        // recent projects that are not currently opened.
+        {
+            let open_paths: std::collections::HashSet<_> = self
+                .tab_manager
+                .groups
+                .values()
+                .map(|g| g.path.clone())
+                .collect();
+            let projects = self.recent_projects.projects.clone();
+            if let Some(action) =
+                self.project_finder
+                    .show(&ctx, &projects, &open_paths, &theme)
+            {
+                if action.path.exists() {
+                    self.tab_manager
+                        .add_group_with_path(ctx.clone(), Some(action.path));
+                    self.tab_manager.save_groups();
+                } else {
+                    self.recent_projects.remove_project(&action.path);
+                    self.save_recent_projects();
+                    self.window_manager.missing_folder(format!(
+                        "{}\n{}",
+                        action.name,
+                        action.path.display()
+                    ));
+                }
+            }
+        }
+
         let panel_actions = show_left_panel(
             ui,
             &self.tab_manager,
@@ -776,6 +812,7 @@ impl eframe::App for App {
             ui,
             &mut self.tab_manager,
             &self.window_manager,
+            self.project_finder.is_open,
             &theme,
             &self.cached_terminal_theme,
             &self.cached_terminal_font,
