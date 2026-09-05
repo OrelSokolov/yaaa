@@ -35,6 +35,7 @@ pub enum GroupAction {
     RemoveGroup,
     SelectTab(u64),
     RemoveTab(u64),
+    ToggleImportant(u64),
 }
 
 #[derive(Default)]
@@ -184,41 +185,58 @@ pub fn show_left_panel(
                                 // text is tinted by severity: red above 500 MB,
                                 // yellow above 200 MB. The name keeps the tab's
                                 // normal text color via Color32::PLACEHOLDER.
-                                let display_label: egui::WidgetText = if show_tab_memory {
-                                    match tab_manager.get_tab(tab_id) {
-                                        Some(tab) => {
-                                            let mem_kb = system_monitor
-                                                .process_tree_memory_kb(tab.backend.pty_id());
-                                            let mem_color = mem_color_for(mem_kb);
-                                            let font_id = egui::FontId::proportional(
-                                                theme.fonts.tab_font_size,
-                                            );
-                                            let mut job = LayoutJob::default();
+                                // Important tabs get a bright yellow dot in front
+                                // of the label.
+                                let display_label: egui::WidgetText =
+                                    if show_tab_memory || tab_info.is_important {
+                                        // Align::Center keeps glyphs from fallback
+                                        // fonts on the same visual line as the
+                                        // regular text. The dot uses "•" (U+2022)
+                                        // because it exists in the base UI font,
+                                        // unlike "●" (U+25CF) which comes from a
+                                        // fallback font with different vertical
+                                        // metrics and sits a couple pixels too
+                                        // high. Slightly smaller so it doesn't
+                                        // dominate the label.
+                                        let fmt = |size, color| TextFormat {
+                                            font_id: egui::FontId::proportional(size),
+                                            color,
+                                            valign: egui::Align::Center,
+                                            ..Default::default()
+                                        };
+                                        let mut job = LayoutJob::default();
+                                        if tab_info.is_important {
+                                            let dot_size = theme.fonts.tab_font_size * 0.9;
                                             job.append(
-                                                &tab_name,
+                                                "• ",
                                                 0.0,
-                                                TextFormat {
-                                                    font_id: font_id.clone(),
-                                                    color: egui::Color32::PLACEHOLDER,
-                                                    ..Default::default()
-                                                },
+                                                fmt(
+                                                    dot_size,
+                                                    egui::Color32::from_rgb(0xff, 0xe0, 0x00),
+                                                ),
                                             );
-                                            job.append(
-                                                &format!(" ({})", format_kb(mem_kb)),
-                                                0.0,
-                                                TextFormat {
-                                                    font_id,
-                                                    color: mem_color,
-                                                    ..Default::default()
-                                                },
-                                            );
-                                            job.into()
                                         }
-                                        None => tab_name.into(),
-                                    }
-                                } else {
-                                    tab_name.into()
-                                };
+                                        job.append(
+                                            &tab_name,
+                                            0.0,
+                                            fmt(theme.fonts.tab_font_size, egui::Color32::PLACEHOLDER),
+                                        );
+                                        if show_tab_memory {
+                                            if let Some(tab) = tab_manager.get_tab(tab_id) {
+                                                let mem_kb = system_monitor
+                                                    .process_tree_memory_kb(tab.backend.pty_id());
+                                                let mem_color = mem_color_for(mem_kb);
+                                                job.append(
+                                                    &format!(" ({})", format_kb(mem_kb)),
+                                                    0.0,
+                                                    fmt(theme.fonts.tab_font_size, mem_color),
+                                                );
+                                            }
+                                        }
+                                        job.into()
+                                    } else {
+                                        tab_name.into()
+                                    };
 
                                 ui.horizontal(|ui| {
                                     let width = ui.available_width() * 0.9;
@@ -256,6 +274,22 @@ pub fn show_left_panel(
                                             .group_actions
                                             .push((*group_id, GroupAction::SelectTab(tab_id)));
                                     }
+
+                                    response.context_menu(|ui| {
+                                        apply_menu_style(ui, theme.fonts.ui_font_size);
+                                        let label = if tab_info.is_important {
+                                            "✖ Unmark as important"
+                                        } else {
+                                            "• Mark as important"
+                                        };
+                                        if ui.button(label).clicked() {
+                                            actions.group_actions.push((
+                                                *group_id,
+                                                GroupAction::ToggleImportant(tab_id),
+                                            ));
+                                            ui.close();
+                                        }
+                                    });
 
                                     theme.close_button.apply_to_visuals(ui);
                                     let close_btn = ui

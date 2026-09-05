@@ -338,6 +338,10 @@ impl App {
                     self.tab_manager.remove(tab_id);
                     self.tab_manager.save_groups();
                 }
+                GroupAction::ToggleImportant(tab_id) => {
+                    self.tab_manager.toggle_important(tab_id);
+                    self.tab_manager.save_groups();
+                }
             }
         }
     }

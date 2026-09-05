@@ -17,6 +17,8 @@ pub struct TabInfo {
     pub agent_index: Option<usize>,
     #[serde(default)]
     pub display_name: String,
+    #[serde(default)]
+    pub is_important: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -247,6 +249,7 @@ impl TabManager {
                         is_agent: use_agent,
                         agent_index: if use_agent { agent_index } else { None },
                         display_name: String::new(),
+                        is_important: false,
                     });
                 }
 
@@ -293,6 +296,7 @@ impl TabManager {
                 is_agent: use_agent,
                 agent_index: if use_agent { agent_index } else { None },
                 display_name: String::new(),
+                is_important: false,
             });
         }
 
@@ -372,6 +376,21 @@ impl TabManager {
         }
     }
 
+    /// Toggle the "important" mark on a tab and refresh its display name.
+    pub fn toggle_important(&mut self, tab_id: u64) {
+        let mut affected_group = None;
+        for (group_id, group) in &mut self.groups {
+            if let Some(tab_info) = group.tabs.iter_mut().find(|t| t.id == tab_id) {
+                tab_info.is_important = !tab_info.is_important;
+                affected_group = Some(*group_id);
+                break;
+            }
+        }
+        if let Some(group_id) = affected_group {
+            self.refresh_display_names(group_id);
+        }
+    }
+
     pub fn set_active_tab(&mut self, id: u64) {
         self.active_tab_id = Some(id);
 
@@ -431,7 +450,9 @@ impl TabManager {
     }
 
     fn format_tab_name(&self, tab_info: &TabInfo, index: usize) -> String {
-        if let Some(idx) = tab_info.agent_index {
+        if tab_info.is_important {
+            format!("{}. Important", index + 1)
+        } else if let Some(idx) = tab_info.agent_index {
             let agent_name = self
                 .agents
                 .get(idx)
