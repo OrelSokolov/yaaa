@@ -1779,7 +1779,7 @@ dependencies = [
 
 [[package]]
 name = "h2term"
-version = "0.5.12"
+version = "0.6.0"
 dependencies = [
  "alacritty_terminal",
  "arboard",
