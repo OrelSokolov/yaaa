@@ -16,8 +16,6 @@ pub struct TabInfo {
     #[serde(default)]
     pub agent_index: Option<usize>,
     #[serde(default)]
-    pub display_name: String,
-    #[serde(default)]
     pub is_important: bool,
 }
 
@@ -47,9 +45,26 @@ impl TabGroup {
     }
 }
 
+/// Read persisted groups from `path`. Returns `None` when the file is missing
+/// or its content cannot be parsed.
+pub(crate) fn read_groups_file(path: &std::path::Path) -> Option<Vec<TabGroup>> {
+    if !path.exists() {
+        return None;
+    }
+    let content = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
+/// Persist `groups` to `path` as pretty JSON, ordered by group id.
+pub(crate) fn write_groups_file(path: &std::path::Path, groups: &BTreeMap<u64, TabGroup>) {
+    if let Ok(json) = serde_json::to_string_pretty(&groups.values().collect::<Vec<_>>()) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
 pub struct TabManager {
     command_sender: Sender<(u64, PtyEvent)>,
-    pub groups: BTreeMap<u64, TabGroup>,
+    groups: BTreeMap<u64, TabGroup>,
     tabs: BTreeMap<u64, Tab>,
     /// Key: (group_id, agent_index) where agent_index is None for terminal.
     preload_pool: HashMap<(u64, Option<usize>), (u64, Tab)>,
@@ -57,10 +72,15 @@ pub struct TabManager {
     pub active_tab_id: Option<u64>,
     next_group_id: u64,
     next_tab_id: u64,
-    pub default_shell_cmd: String,
-    pub agents: [AgentConfig; MAX_AGENTS],
-    pub run_as_login_shell: bool,
+    /// Copy of the launch config used to spawn new tabs; kept in sync with
+    /// the owner (`App::launch_config`) via `update_launch_config`.
+    default_shell_cmd: String,
+    agents: [AgentConfig; MAX_AGENTS],
+    run_as_login_shell: bool,
     preload_enabled: bool,
+    /// Set by every mutating method; flushed once per frame by
+    /// `save_groups_if_dirty` so callers never need to remember to save.
+    groups_dirty: bool,
     /// Last known terminal content size, used to seed new terminals at the
     /// correct column/row count so the PTY does not boot at the 80x50 default.
     terminal_layout_hint: Option<egui_term::Size>,
@@ -73,10 +93,7 @@ impl TabManager {
     pub fn new(
         command_sender: Sender<(u64, PtyEvent)>,
         cc: &eframe::CreationContext<'_>,
-        default_shell_cmd: String,
-        agents: [AgentConfig; MAX_AGENTS],
-        run_as_login_shell: bool,
-        preload_enabled: bool,
+        launch: &crate::config::TerminalLaunchConfig,
         terminal_layout_hint: Option<egui_term::Size>,
         cell_metrics_hint: Option<egui_term::Size>,
     ) -> Self {
@@ -89,10 +106,11 @@ impl TabManager {
             active_tab_id: None,
             next_group_id: 0,
             next_tab_id: 0,
-            default_shell_cmd,
-            agents,
-            run_as_login_shell,
-            preload_enabled,
+            default_shell_cmd: launch.default_shell_cmd.clone(),
+            agents: launch.agents.clone(),
+            run_as_login_shell: launch.run_as_login_shell,
+            preload_enabled: launch.preload_tabs,
+            groups_dirty: false,
             terminal_layout_hint,
             cell_metrics_hint,
         };
@@ -155,8 +173,6 @@ impl TabManager {
                 manager.active_group_id = Some(*first_group.0);
                 manager.active_tab_id = first_group.1.tabs.first().map(|t| t.id);
             }
-
-            manager.refresh_all_display_names();
         }
 
         let current_dir_exists_in_groups = manager.groups.values().any(|g| g.path == current_dir);
@@ -178,28 +194,43 @@ impl TabManager {
     }
 
     fn load_groups(&mut self) -> Option<Vec<TabGroup>> {
-        if let Some(config_dir) = crate::config::config_dir() {
-            let groups_file = config_dir.join(GROUPS_FILE);
-            if groups_file.exists() {
-                if let Ok(content) = std::fs::read_to_string(&groups_file) {
-                    if let Ok(groups) = serde_json::from_str::<Vec<TabGroup>>(&content) {
-                        return Some(groups);
-                    }
-                }
-            }
-        }
-        None
+        let path = crate::config::config_dir().map(|d| d.join(GROUPS_FILE))?;
+        read_groups_file(&path)
     }
 
-    pub fn save_groups(&self) {
-        if let Some(config_dir) = crate::config::config_dir() {
-            let groups_file = config_dir.join(GROUPS_FILE);
-            if let Ok(groups) =
-                serde_json::to_string_pretty(&self.groups.values().collect::<Vec<_>>())
-            {
-                let _ = std::fs::write(&groups_file, groups);
-            }
+    /// All project groups, ordered by group id.
+    pub fn iter_groups(&self) -> impl Iterator<Item = &TabGroup> {
+        self.groups.values()
+    }
+
+    /// Whether any project group exists.
+    pub fn has_groups(&self) -> bool {
+        !self.groups.is_empty()
+    }
+
+    /// Look up one project group by id.
+    pub fn group(&self, id: u64) -> Option<&TabGroup> {
+        self.groups.get(&id)
+    }
+
+    /// Persist the session if any group changed since the last flush.
+    /// Called once per frame by `App`; mutating methods mark the session
+    /// dirty automatically, so callers never need to remember to save.
+    pub fn save_groups_if_dirty(&mut self) {
+        if self.groups_dirty {
+            self.save_groups();
+            self.groups_dirty = false;
         }
+    }
+
+    fn save_groups(&self) {
+        if let Some(config_dir) = crate::config::config_dir() {
+            write_groups_file(&config_dir.join(GROUPS_FILE), &self.groups);
+        }
+    }
+
+    fn mark_dirty(&mut self) {
+        self.groups_dirty = true;
     }
 
     pub fn add_group_with_path(&mut self, ctx: egui::Context, path: Option<PathBuf>) {
@@ -213,6 +244,7 @@ impl TabManager {
         let group = TabGroup::new(group_id, name, path);
         self.groups.insert(group_id, group);
         self.active_group_id = Some(group_id);
+        self.mark_dirty();
 
         self.add_tab_to_group(group_id, ctx.clone(), None);
         self.populate_preload_for_group(group_id, ctx);
@@ -221,6 +253,7 @@ impl TabManager {
     pub fn rename_group(&mut self, group_id: u64, new_name: String) {
         if let Some(group) = self.groups.get_mut(&group_id) {
             group.name = new_name;
+            self.mark_dirty();
         }
     }
 
@@ -248,16 +281,15 @@ impl TabManager {
                         id: tab_id,
                         is_agent: use_agent,
                         agent_index: if use_agent { agent_index } else { None },
-                        display_name: String::new(),
                         is_important: false,
                     });
                 }
 
-                self.refresh_display_names(group_id);
                 self.active_group_id = Some(group_id);
                 self.active_tab_id = Some(tab_id);
 
                 self.spawn_preload_tab(group_id, agent_index, ctx);
+                self.mark_dirty();
                 return;
             }
         }
@@ -295,15 +327,13 @@ impl TabManager {
                 id: tab_id,
                 is_agent: use_agent,
                 agent_index: if use_agent { agent_index } else { None },
-                display_name: String::new(),
                 is_important: false,
             });
         }
 
-        self.refresh_display_names(group_id);
-
         self.active_group_id = Some(group_id);
         self.active_tab_id = Some(tab_id);
+        self.mark_dirty();
     }
 
     pub fn remove_group(&mut self, group_id: u64) {
@@ -314,6 +344,7 @@ impl TabManager {
         }
         self.clear_preload_for_group(group_id);
         self.groups.remove(&group_id);
+        self.mark_dirty();
 
         if self.active_group_id == Some(group_id) {
             if let Some(first_group) = self.groups.first_key_value() {
@@ -351,8 +382,8 @@ impl TabManager {
             return;
         }
 
-        if let Some(group_id) = affected_group_id {
-            self.refresh_display_names(group_id);
+        if affected_group_id.is_some() {
+            self.mark_dirty();
         }
 
         if self.active_tab_id == Some(id) {
@@ -368,6 +399,9 @@ impl TabManager {
         self.preload_pool.clear();
         self.active_group_id = None;
         self.active_tab_id = None;
+        // Exiting the app: drop any pending changes instead of flushing an
+        // empty session over the saved one.
+        self.groups_dirty = false;
     }
 
     pub fn set_title(&mut self, id: u64, title: String) {
@@ -376,18 +410,18 @@ impl TabManager {
         }
     }
 
-    /// Toggle the "important" mark on a tab and refresh its display name.
+    /// Toggle the "important" mark on a tab.
     pub fn toggle_important(&mut self, tab_id: u64) {
-        let mut affected_group = None;
-        for (group_id, group) in &mut self.groups {
+        let mut toggled = false;
+        for group in self.groups.values_mut() {
             if let Some(tab_info) = group.tabs.iter_mut().find(|t| t.id == tab_id) {
                 tab_info.is_important = !tab_info.is_important;
-                affected_group = Some(*group_id);
+                toggled = true;
                 break;
             }
         }
-        if let Some(group_id) = affected_group {
-            self.refresh_display_names(group_id);
+        if toggled {
+            self.mark_dirty();
         }
     }
 
@@ -449,48 +483,6 @@ impl TabManager {
         }
     }
 
-    fn format_tab_name(&self, tab_info: &TabInfo, index: usize) -> String {
-        if tab_info.is_important {
-            format!("{}. Important", index + 1)
-        } else if let Some(idx) = tab_info.agent_index {
-            let agent_name = self
-                .agents
-                .get(idx)
-                .filter(|a| !a.name.trim().is_empty())
-                .map(|a| a.name.clone())
-                .unwrap_or_else(|| format!("Агент {}", idx + 1));
-            format!("{}. {} 💬", index + 1, agent_name)
-        } else {
-            format!("{}. Terminal", index + 1)
-        }
-    }
-
-    fn refresh_display_names(&mut self, group_id: u64) {
-        let names: Vec<String> = if let Some(group) = self.groups.get(&group_id) {
-            group
-                .tabs
-                .iter()
-                .enumerate()
-                .map(|(i, tab_info)| self.format_tab_name(tab_info, i))
-                .collect()
-        } else {
-            return;
-        };
-
-        if let Some(group) = self.groups.get_mut(&group_id) {
-            for (tab_info, name) in group.tabs.iter_mut().zip(names) {
-                tab_info.display_name = name;
-            }
-        }
-    }
-
-    fn refresh_all_display_names(&mut self) {
-        let group_ids: Vec<u64> = self.groups.keys().copied().collect();
-        for group_id in group_ids {
-            self.refresh_display_names(group_id);
-        }
-    }
-
     fn get_tab_mut(&mut self, id: u64) -> Option<&mut Tab> {
         self.tabs.get_mut(&id)
     }
@@ -506,22 +498,23 @@ impl TabManager {
         self.tabs.get_mut(&tab_id)
     }
 
-    pub fn set_default_shell_cmd(&mut self, shell_cmd: String) {
-        self.default_shell_cmd = shell_cmd;
-    }
-
-    pub fn set_agents(&mut self, agents: [AgentConfig; MAX_AGENTS], ctx: egui::Context) {
-        self.agents = agents;
-        self.refresh_all_display_names();
-
-        if self.preload_enabled {
+    /// Replace the three `set_*` methods: sync this manager's copy of the
+    /// launch config with the owner's. Rebuilds the preload pool when agents
+    /// change and enables/disables preloading as configured.
+    pub fn update_launch_config(
+        &mut self,
+        config: &crate::config::TerminalLaunchConfig,
+        ctx: &egui::Context,
+    ) {
+        let agents_changed = self.agents != config.agents;
+        self.default_shell_cmd = config.default_shell_cmd.clone();
+        self.agents = config.agents.clone();
+        self.run_as_login_shell = config.run_as_login_shell;
+        // Stale preloaded tabs still run the old agent commands; drop them.
+        if agents_changed && self.preload_enabled {
             self.clear_preload_pool();
-            self.populate_preload_pool(ctx);
         }
-    }
-
-    pub fn set_run_as_login_shell(&mut self, run_as_login_shell: bool) {
-        self.run_as_login_shell = run_as_login_shell;
+        self.set_preload_enabled(config.preload_tabs, ctx.clone());
     }
 
     /// Update the last known terminal content size. Used to seed newly created
@@ -634,5 +627,99 @@ impl TabManager {
         } else {
             self.clear_preload_pool();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    fn sample_groups() -> BTreeMap<u64, TabGroup> {
+        let mut group = TabGroup::new(1, "proj".to_string(), PathBuf::from("/tmp/proj"));
+        group.tabs.push(TabInfo {
+            id: 10,
+            is_agent: false,
+            agent_index: None,
+            is_important: false,
+        });
+        group.tabs.push(TabInfo {
+            id: 11,
+            is_agent: true,
+            agent_index: Some(0),
+            is_important: true,
+        });
+        let mut groups = BTreeMap::new();
+        groups.insert(1, group);
+        groups
+    }
+
+    #[test]
+    fn groups_file_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("groups.json");
+        let groups = sample_groups();
+
+        write_groups_file(&path, &groups);
+        let loaded = read_groups_file(&path).unwrap();
+
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].name, "proj");
+        assert_eq!(loaded[0].path, PathBuf::from("/tmp/proj"));
+        assert_eq!(loaded[0].tabs.len(), 2);
+        assert_eq!(loaded[0].tabs[0].id, 10);
+        assert!(loaded[0].tabs[1].is_important);
+        assert_eq!(loaded[0].tabs[1].agent_index, Some(0));
+    }
+
+    #[test]
+    fn groups_file_missing_returns_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("does-not-exist.json");
+        assert!(read_groups_file(&path).is_none());
+    }
+
+    #[test]
+    fn groups_file_corrupt_returns_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("groups.json");
+        std::fs::write(&path, "{ not json").unwrap();
+        assert!(read_groups_file(&path).is_none());
+    }
+
+    #[test]
+    fn groups_file_missing_tab_fields_use_defaults() {
+        // A session file written before is_important/agent_index existed must
+        // still deserialize with defaults filled in.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("groups.json");
+        std::fs::write(
+            &path,
+            r#"[{"id":1,"name":"p","path":"/tmp/p","tabs":[{"id":3,"is_agent":false}]}]"#,
+        )
+        .unwrap();
+        let loaded = read_groups_file(&path).unwrap();
+        assert!(!loaded[0].tabs[0].is_important);
+        assert_eq!(loaded[0].tabs[0].agent_index, None);
+    }
+
+    #[test]
+    fn name_from_path_uses_file_name() {
+        assert_eq!(
+            TabGroup::name_from_path(&PathBuf::from("/home/user/my-project")),
+            "my-project"
+        );
+    }
+
+    #[test]
+    fn name_from_path_root_falls_back_to_full_path() {
+        let name = TabGroup::name_from_path(&PathBuf::from("/"));
+        assert_eq!(name, "/");
+    }
+
+    #[test]
+    fn name_from_path_relative_no_file_name_falls_back() {
+        let name = TabGroup::name_from_path(&PathBuf::from("."));
+        assert_eq!(name, ".");
     }
 }

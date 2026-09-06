@@ -1,13 +1,13 @@
-use crate::config::{RecentProjects, Settings};
+use crate::config::{RecentProjects, Settings, TerminalLaunchConfig};
 use crate::git_status::GitStatusCache;
 use crate::hotkeys::handle_keyboard_events;
-use crate::menu::apply_menu_style;
-use crate::system_monitor::{format_kb, SystemMonitor};
-use crate::terminal::TabManager;
-use crate::theme::AppTheme;
+use crate::system_monitor::SystemMonitor;
+use crate::terminal::{TabManager, TerminalLayoutTracker};
+use crate::theme::{setup_visuals, AppTheme};
 use crate::ui::{
-    show_central_panel, show_debug_panel, show_left_panel, show_search_panel, GroupAction,
-    PanelActions, ProjectFinder, WindowActions, WindowManager,
+    show_central_panel, show_debug_panel, show_left_panel, show_menu_bar, show_search_panel,
+    GroupAction, MenuActions, MenuBarView, PanelActions, ProjectFinder, WindowActions,
+    WindowManager,
 };
 use egui_term::BackendCommand;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -31,35 +31,21 @@ pub struct App {
     cached_terminal_font: egui_term::TerminalFont,
     git_cache: GitStatusCache,
     enable_git_status: bool,
+    /// Single source of truth for how new terminals are spawned. `Settings`
+    /// is its serialized form; `TabManager` and the settings dialogs hold
+    /// copies synced through `update_launch_config`.
+    launch_config: TerminalLaunchConfig,
     system_monitor: SystemMonitor,
     /// When the theme settings window is open, this holds the live-preview theme
     /// so that `clear_color` can reflect opacity changes immediately.
     preview_theme: Option<AppTheme>,
     exit_confirmed: bool,
-    /// Persisted copy of the last terminal content size [w, h], saved to
-    /// settings so new terminals boot at the correct size on cold start.
-    last_terminal_layout: Option<[f32; 2]>,
-    /// Persisted copy of the last font cell metrics [w, h].
-    last_terminal_cell_metrics: Option<[f32; 2]>,
-    /// Deadline to flush `last_terminal_layout` to disk (debounced during resize).
-    terminal_layout_save_at: Option<std::time::Instant>,
+    /// Tracks the persisted terminal content size and font cell metrics,
+    /// debouncing writes to the settings file during resizes.
+    layout_tracker: TerminalLayoutTracker,
     /// Result channel of a folder picker opened on a background thread, so the
     /// UI keeps rendering while the native dialog is shown.
     folder_pick: Option<Receiver<Option<std::path::PathBuf>>>,
-}
-
-fn setup_visuals(ctx: &egui::Context, theme: &AppTheme) {
-    // Set both light and dark styles to the same look, then lock the active
-    // theme to Dark. This prevents macOS's light system theme from switching the
-    // UI to white after the first frame.
-    let visuals = theme.visuals();
-    ctx.set_visuals_of(egui::Theme::Dark, visuals.clone());
-    ctx.set_visuals_of(egui::Theme::Light, visuals);
-    ctx.set_theme(egui::Theme::Dark);
-
-    // Force the native window chrome (title bar / traffic lights) to dark mode on macOS
-    // so it matches the rest of the UI instead of following the system light appearance.
-    ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark));
 }
 
 impl App {
@@ -90,25 +76,17 @@ impl App {
             .last_terminal_cell_metrics
             .map(|[w, h]| egui_term::Size::new(w, h));
 
+        let launch_config = TerminalLaunchConfig::from_settings(&settings);
+
         let tab_manager = TabManager::new(
             command_sender_clone,
             cc,
-            settings.default_shell_cmd.clone(),
-            settings.agents.clone(),
-            settings.run_as_login_shell,
-            settings.preload_tabs,
+            &launch_config,
             terminal_layout_hint,
             cell_metrics_hint,
         );
 
-        let window_manager = WindowManager::new(
-            settings.default_shell_cmd.clone(),
-            settings.agents.clone(),
-            settings.run_as_login_shell,
-            settings.enable_git_status,
-            theme,
-            settings.preload_tabs,
-        );
+        let window_manager = WindowManager::new(theme);
 
         let recent_projects = RecentProjects::load();
 
@@ -134,33 +112,33 @@ impl App {
             cached_terminal_font,
             git_cache,
             enable_git_status: settings.enable_git_status,
+            launch_config,
             system_monitor: SystemMonitor::new(),
             preview_theme: None,
             exit_confirmed: false,
-            last_terminal_layout: settings.last_terminal_layout,
-            last_terminal_cell_metrics: settings.last_terminal_cell_metrics,
-            terminal_layout_save_at: None,
+            layout_tracker: TerminalLayoutTracker::new(
+                settings.last_terminal_layout,
+                settings.last_terminal_cell_metrics,
+            ),
             folder_pick: None,
         }
     }
 
     fn save_settings(&self) {
-        let settings = Settings {
+        let mut settings = Settings {
             show_terminal_lines: self.show_terminal_lines,
             show_fps: self.show_fps,
             show_sidebar: self.show_sidebar,
             show_system_monitor: self.show_system_monitor,
             show_tab_memory: self.show_tab_memory,
-            run_as_login_shell: self.window_manager.editing_run_as_login_shell,
-            default_shell_cmd: self.window_manager.editing_default_shell_cmd.clone(),
-            agents: self.window_manager.editing_agents.clone(),
             legacy_default_agent_cmd: None,
             theme: self.theme,
-            enable_git_status: self.window_manager.editing_enable_git_status,
-            preload_tabs: self.window_manager.editing_preload_tabs,
-            last_terminal_layout: self.last_terminal_layout,
-            last_terminal_cell_metrics: self.last_terminal_cell_metrics,
+            enable_git_status: self.enable_git_status,
+            last_terminal_layout: self.layout_tracker.last_layout(),
+            last_terminal_cell_metrics: self.layout_tracker.last_cell_metrics(),
+            ..Default::default()
         };
+        self.launch_config.apply_to_settings(&mut settings);
         settings.save();
     }
 
@@ -205,7 +183,6 @@ impl App {
         self.save_recent_projects();
         self.tab_manager
             .add_group_with_path(ctx.clone(), Some(path));
-        self.tab_manager.save_groups();
     }
 
     fn handle_command_events(&mut self) {
@@ -305,6 +282,88 @@ impl App {
         )
     }
 
+    fn handle_menu_actions(&mut self, ctx: &egui::Context, actions: MenuActions) {
+        if actions.add_project {
+            self.spawn_folder_pick(ctx);
+        }
+
+        if let Some(project) = actions.open_project {
+            if project.path.exists() {
+                self.tab_manager
+                    .add_group_with_path(ctx.clone(), Some(project.path));
+            } else {
+                self.recent_projects.remove_project(&project.path);
+                self.save_recent_projects();
+                self.window_manager.missing_folder(format!(
+                    "{}\n{}",
+                    project.name,
+                    project.path.display()
+                ));
+            }
+        }
+
+        if actions.show_about {
+            self.window_manager.show_about = true;
+        }
+        if actions.show_theme_settings {
+            self.window_manager.begin_theme_edit(&self.theme);
+            self.window_manager.show_theme_settings = true;
+        }
+        if actions.show_font_settings {
+            self.window_manager.begin_font_edit(&self.theme.fonts);
+            self.window_manager.show_font_settings = true;
+        }
+        if actions.show_terminal_settings {
+            self.window_manager
+                .begin_settings_edit(&self.launch_config, self.enable_git_status);
+            self.window_manager.show_settings = true;
+        }
+        if actions.show_agents_settings {
+            self.window_manager.begin_agents_edit(&self.launch_config);
+            self.window_manager.show_agents_settings = true;
+        }
+        if actions.show_hotkeys {
+            self.window_manager.show_hotkeys = true;
+        }
+
+        if actions.toggle_git_status {
+            self.enable_git_status = !self.enable_git_status;
+            self.save_settings();
+        }
+
+        if actions.toggle_preload_tabs {
+            self.launch_config.preload_tabs = !self.launch_config.preload_tabs;
+            self.tab_manager
+                .update_launch_config(&self.launch_config, ctx);
+            self.save_settings();
+        }
+
+        if actions.toggle_system_monitor {
+            self.show_system_monitor = !self.show_system_monitor;
+            self.save_settings();
+        }
+
+        if actions.toggle_terminal_lines {
+            self.show_terminal_lines = !self.show_terminal_lines;
+            self.save_settings();
+        }
+
+        if actions.toggle_fps {
+            self.show_fps = !self.show_fps;
+            self.save_settings();
+        }
+
+        if actions.toggle_sidebar {
+            self.show_sidebar = !self.show_sidebar;
+            self.save_settings();
+        }
+
+        if actions.toggle_tab_memory {
+            self.show_tab_memory = !self.show_tab_memory;
+            self.save_settings();
+        }
+    }
+
     fn handle_panel_actions(
         &mut self,
         ctx: &egui::Context,
@@ -317,36 +376,31 @@ impl App {
         if let Some(group_id) = actions.add_tab_to_group {
             self.tab_manager
                 .add_tab_to_group(group_id, ctx.clone(), None);
-            self.tab_manager.save_groups();
         }
 
         for (group_id, agent_index) in actions.add_agent_tab_to_group {
             self.tab_manager
                 .add_tab_to_group(group_id, ctx.clone(), Some(agent_index));
-            self.tab_manager.save_groups();
         }
 
         for (group_id, action) in actions.group_actions {
             match action {
                 GroupAction::RemoveGroup => {
-                    if let Some(group) = self.tab_manager.groups.get(&group_id) {
+                    if let Some(group) = self.tab_manager.group(group_id) {
                         self.recent_projects
                             .add_project(group.name.clone(), group.path.clone());
                         self.save_recent_projects();
                     }
                     self.tab_manager.remove_group(group_id);
-                    self.tab_manager.save_groups();
                 }
                 GroupAction::SelectTab(tab_id) => {
                     self.tab_manager.set_active_tab(tab_id);
                 }
                 GroupAction::RemoveTab(tab_id) => {
                     self.tab_manager.remove(tab_id);
-                    self.tab_manager.save_groups();
                 }
                 GroupAction::ToggleImportant(tab_id) => {
                     self.tab_manager.toggle_important(tab_id);
-                    self.tab_manager.save_groups();
                 }
             }
         }
@@ -357,8 +411,7 @@ impl App {
         self.cached_terminal_font = self.theme.terminal_font();
         let metrics = self.cached_terminal_font.font_measure(ctx);
         self.tab_manager.set_cell_metrics_hint(metrics);
-        self.last_terminal_cell_metrics = Some([metrics.width, metrics.height]);
-        self.terminal_layout_save_at = Some(std::time::Instant::now());
+        self.layout_tracker.note_cell_metrics([metrics.width, metrics.height]);
     }
 
     fn effective_theme(&self) -> &AppTheme {
@@ -367,34 +420,32 @@ impl App {
 
     fn sync_git_paths(&mut self) {
         let paths: Vec<_> = self.tab_manager
-            .groups
-            .values()
+            .iter_groups()
             .map(|g| g.path.clone())
             .collect();
         self.git_cache.retain(|p| paths.iter().any(|q| q == p));
     }
 
     fn handle_window_actions(&mut self, actions: WindowActions) {
+        let mut config_changed = false;
+
         if let Some((group_id, name)) = actions.rename_group {
             self.tab_manager.rename_group(group_id, name);
-            self.tab_manager.save_groups();
-        }
-
-        if actions.should_save_groups {
-            self.tab_manager.save_groups();
         }
 
         if let Some(shell_cmd) = actions.default_shell_cmd {
-            self.tab_manager.set_default_shell_cmd(shell_cmd);
+            self.launch_config.default_shell_cmd = shell_cmd;
+            config_changed = true;
         }
 
         if let Some(agents) = actions.agents {
-            self.tab_manager
-                .set_agents(agents, self.egui_ctx.clone());
+            self.launch_config.agents = agents;
+            config_changed = true;
         }
 
         if let Some(run_as_login_shell) = actions.run_as_login_shell {
-            self.tab_manager.set_run_as_login_shell(run_as_login_shell);
+            self.launch_config.run_as_login_shell = run_as_login_shell;
+            config_changed = true;
         }
 
         if let Some(enable_git_status) = actions.enable_git_status {
@@ -402,8 +453,13 @@ impl App {
         }
 
         if let Some(preload_tabs) = actions.preload_tabs {
+            self.launch_config.preload_tabs = preload_tabs;
+            config_changed = true;
+        }
+
+        if config_changed {
             self.tab_manager
-                .set_preload_enabled(preload_tabs, self.egui_ctx.clone());
+                .update_launch_config(&self.launch_config, &self.egui_ctx);
         }
 
         if let Some(theme) = actions.theme {
@@ -422,6 +478,24 @@ impl App {
             let ctx = self.egui_ctx.clone();
             self.rebuild_terminal_cache(&ctx);
             self.theme.fonts.apply(&self.egui_ctx);
+        }
+
+        // The theme/font windows were closed without saving: roll the live
+        // preview back to the applied theme.
+        if actions.theme_discarded {
+            self.preview_theme = None;
+            setup_visuals(&self.egui_ctx, &self.theme);
+            self.theme.fonts.apply(&self.egui_ctx);
+            self.window_manager.last_applied_opacity = self.theme.app_bg_opacity;
+            let transparent = self.theme.app_bg_opacity < 100;
+            self.egui_ctx
+                .send_viewport_cmd(egui::ViewportCommand::Transparent(transparent));
+            self.egui_ctx.request_repaint();
+        }
+
+        if actions.fonts_discarded {
+            self.theme.fonts.apply(&self.egui_ctx);
+            self.egui_ctx.request_repaint();
         }
 
         if actions.should_save_settings {
@@ -482,254 +556,43 @@ impl eframe::App for App {
         let total_tabs_kb: u64 = {
             let tm = &self.tab_manager;
             let sm = &mut self.system_monitor;
-            tm.groups
-                .values()
+            tm.iter_groups()
                 .flat_map(|g| g.tabs.iter())
                 .filter_map(|t| tm.get_tab(t.id))
                 .map(|tab| sm.process_tree_memory_kb(tab.backend.pty_id()))
                 .sum()
         };
 
-        egui::Panel::top("menu_bar")
-            .frame(egui::Frame {
-                fill: theme.app_bg_with_opacity(),
-                ..Default::default()
-            })
-            .show_inside(ui, |ui| {
-                ui.add_space(4.0);
-                ui.vertical(|ui| {
-                    ui.add_space(2.0);
-                    ui.horizontal(|ui| {
-                        ui.style_mut().text_styles.insert(
-                            egui::TextStyle::Button,
-                            egui::FontId::proportional(theme.fonts.ui_font_size),
-                        );
-                        ui.style_mut().text_styles.insert(
-                            egui::TextStyle::Body,
-                            egui::FontId::proportional(theme.fonts.ui_font_size),
-                        );
+        let open_paths: std::collections::HashSet<_> = self
+            .tab_manager
+            .iter_groups()
+            .map(|g| g.path.clone())
+            .collect();
 
-                        egui::MenuBar::new().ui(ui, |ui| {
-                            ui.style_mut().spacing.button_padding = egui::vec2(6.0, 2.0);
-                            ui.style_mut().text_styles.insert(
-                                egui::TextStyle::Button,
-                                egui::FontId::proportional(theme.fonts.ui_font_size),
-                            );
+        let menu_actions = show_menu_bar(
+            ui,
+            MenuBarView {
+                theme: &theme,
+                enable_git_status: self.enable_git_status,
+                preload_tabs: self.launch_config.preload_tabs,
+                show_sidebar: self.show_sidebar,
+                show_system_monitor: self.show_system_monitor,
+                show_terminal_lines: self.show_terminal_lines,
+                show_fps: self.show_fps,
+                open_paths: &open_paths,
+                recent_projects: &self.recent_projects.projects,
+                ram_percent: mem_percent,
+                total_tabs_kb,
+            },
+        );
 
-                            ui.menu_button("H2Term byOrlov", |ui| {
-                                apply_menu_style(ui, theme.fonts.ui_font_size);
-
-                                if ui.button("ℹ About").clicked() {
-                                    self.window_manager.show_about = true;
-                                    ui.close();
-                                }
-                            });
-                            ui.menu_button("Projects", |ui| {
-                                apply_menu_style(ui, theme.fonts.ui_font_size);
-
-                                if ui.button("➕ Add project").clicked() {
-                                    self.spawn_folder_pick(&ctx);
-                                    ui.close();
-                                }
-
-                                ui.separator();
-
-                                let opened_paths: std::collections::HashSet<_> = self
-                                    .tab_manager
-                                    .groups
-                                    .values()
-                                    .map(|g| g.path.clone())
-                                    .collect();
-
-                                let recent_projects: Vec<_> = self
-                                    .recent_projects
-                                    .projects
-                                    .iter()
-                                    .filter(|p| !opened_paths.contains(&p.path))
-                                    .cloned()
-                                    .collect();
-
-                                if !recent_projects.is_empty() {
-                                    for project in recent_projects {
-                                        if ui.button(&project.name).clicked() {
-                                            let name = project.name.clone();
-                                            let path = project.path.clone();
-                                            if path.exists() {
-                                                self.tab_manager.add_group_with_path(
-                                                    ctx.clone(),
-                                                    Some(path),
-                                                );
-                                                self.tab_manager.save_groups();
-                                            } else {
-                                                self.recent_projects.remove_project(&path);
-                                                self.save_recent_projects();
-                                                self.window_manager.missing_folder(format!(
-                                                    "{}\n{}",
-                                                    name,
-                                                    path.display()
-                                                ));
-                                            }
-                                            ui.close();
-                                        }
-                                    }
-                                } else {
-                                    ui.label("No recent projects");
-                                }
-                            });
-                            ui.menu_button("Settings", |ui| {
-                                apply_menu_style(ui, theme.fonts.ui_font_size);
-
-                                if ui.button("🎨 Theme").clicked() {
-                                    self.window_manager.show_theme_settings = true;
-                                    ui.close();
-                                }
-
-                                if ui.button("🔤 Fonts").clicked() {
-                                    self.window_manager.show_font_settings = true;
-                                    ui.close();
-                                }
-
-                                ui.separator();
-
-                                let git_status_label = if self.enable_git_status {
-                                    "🔀 Hide git status"
-                                } else {
-                                    "🔀 Show git status"
-                                };
-                                if ui.button(git_status_label).clicked() {
-                                    let new_state = !self.enable_git_status;
-                                    self.enable_git_status = new_state;
-                                    self.window_manager.editing_enable_git_status = new_state;
-                                    self.window_manager.saved_enable_git_status = new_state;
-                                    self.save_settings();
-                                    ui.close();
-                                }
-
-                                let preload_label = if self.window_manager.editing_preload_tabs {
-                                    "⚡ Disable terminal preload"
-                                } else {
-                                    "⚡ Enable terminal preload"
-                                };
-                                if ui.button(preload_label).clicked() {
-                                    let new_state = !self.window_manager.editing_preload_tabs;
-                                    self.window_manager.editing_preload_tabs = new_state;
-                                    self.window_manager.saved_preload_tabs = new_state;
-                                    self.tab_manager
-                                        .set_preload_enabled(new_state, ctx.clone());
-                                    self.save_settings();
-                                    ui.close();
-                                }
-
-                                let sysmon_label = if self.show_system_monitor {
-                                    "🖥 Hide system monitor"
-                                } else {
-                                    "🖥 Show system monitor"
-                                };
-                                if ui.button(sysmon_label).clicked() {
-                                    self.show_system_monitor = !self.show_system_monitor;
-                                    self.save_settings();
-                                    ui.close();
-                                }
-
-                                if ui.button("💻 Terminal").clicked() {
-                                    self.window_manager.show_settings = true;
-                                    ui.close();
-                                }
-                                if ui.button("💬 Agents").clicked() {
-                                    self.window_manager.show_agents_settings = true;
-                                    ui.close();
-                                }
-
-                                ui.separator();
-
-                                ui.menu_button("🐛 Debug", |ui| {
-                                    apply_menu_style(ui, theme.fonts.ui_font_size);
-
-                                    if ui
-                                        .button(if self.show_terminal_lines {
-                                            "🚫 Hide terminal lines"
-                                        } else {
-                                            "📊 Show terminal lines"
-                                        })
-                                        .clicked()
-                                    {
-                                        self.show_terminal_lines = !self.show_terminal_lines;
-                                        self.save_settings();
-                                    }
-                                    if ui
-                                        .button(if self.show_fps {
-                                            "🚫 Hide FPS"
-                                        } else {
-                                            "⚡ Show FPS"
-                                        })
-                                        .clicked()
-                                    {
-                                        self.show_fps = !self.show_fps;
-                                        self.save_settings();
-                                    }
-                                });
-                            });
-                            ui.menu_button("Help", |ui| {
-                                apply_menu_style(ui, theme.fonts.ui_font_size);
-                                if ui.button("⌘ Hotkeys").clicked() {
-                                    self.window_manager.show_hotkeys = true;
-                                    ui.close();
-                                }
-                            });
-
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    let btn_text = if self.show_sidebar {
-                                        "📂 Hide Sidebar"
-                                    } else {
-                                        "📂 Show Sidebar"
-                                    };
-                                    if ui
-                                        .button(btn_text)
-                                        .on_hover_cursor(egui::CursorIcon::PointingHand)
-                                        .clicked()
-                                    {
-                                        self.show_sidebar = !self.show_sidebar;
-                                        self.save_settings();
-                                    }
-
-                                    if self.show_system_monitor {
-                                        ui.add_space(16.0);
-                                        ui.label(format!("Total: {}", format_kb(total_tabs_kb)));
-
-                                        let ram_label = format!("RAM: {:.0}%", mem_percent);
-                                        if ui
-                                            .button(ram_label)
-                                            .on_hover_cursor(egui::CursorIcon::PointingHand)
-                                            .on_hover_text(
-                                                "Click to toggle per-tab memory next to tab names",
-                                            )
-                                            .clicked()
-                                        {
-                                            self.show_tab_memory = !self.show_tab_memory;
-                                            self.save_settings();
-                                        }
-                                    }
-                                },
-                            );
-                        });
-                    });
-                    ui.add_space(4.0);
-                });
-            });
+        self.handle_menu_actions(&ctx, menu_actions);
 
         let window_actions = self.window_manager.show(&ctx);
 
         // Fuzzy project finder (Ctrl+Shift+O). Same list as the Projects menu:
         // recent projects that are not currently opened.
         {
-            let open_paths: std::collections::HashSet<_> = self
-                .tab_manager
-                .groups
-                .values()
-                .map(|g| g.path.clone())
-                .collect();
             let projects = self.recent_projects.projects.clone();
             if let Some(action) =
                 self.project_finder
@@ -738,7 +601,6 @@ impl eframe::App for App {
                 if action.path.exists() {
                     self.tab_manager
                         .add_group_with_path(ctx.clone(), Some(action.path));
-                    self.tab_manager.save_groups();
                 } else {
                     self.recent_projects.remove_project(&action.path);
                     self.save_recent_projects();
@@ -756,7 +618,7 @@ impl eframe::App for App {
             &self.tab_manager,
             &mut self.window_manager,
             self.show_sidebar,
-            &self.tab_manager.agents,
+            &self.launch_config.agents,
             &theme,
             &mut self.git_cache,
             self.enable_git_status,
@@ -793,20 +655,21 @@ impl eframe::App for App {
 
         if let Some(tab_id) = close_tab_id {
             self.tab_manager.remove(tab_id);
-            self.tab_manager.save_groups();
         }
 
         if let Some(group_id) = add_tab_to_group {
             self.tab_manager
                 .add_tab_to_group(group_id, ctx.clone(), None);
-            self.tab_manager.save_groups();
         }
 
         for (group_id, agent_index) in add_agent_tab_to_group {
             self.tab_manager
                 .add_tab_to_group(group_id, ctx.clone(), Some(agent_index));
-            self.tab_manager.save_groups();
         }
+
+        // One flush per frame covers every mutation above; mutating methods
+        // mark the session dirty themselves.
+        self.tab_manager.save_groups_if_dirty();
 
         show_central_panel(
             ui,
@@ -821,29 +684,18 @@ impl eframe::App for App {
         // Lazily compute real font cell metrics on the first frame (egui fonts
         // are not available during App::new) and seed the terminal hint from
         // them so newly created tabs boot at the correct column/row count.
-        if self.last_terminal_cell_metrics.is_none() {
+        if self.layout_tracker.last_cell_metrics().is_none() {
             let metrics = self.cached_terminal_font.font_measure(&ctx);
-            self.last_terminal_cell_metrics = Some([metrics.width, metrics.height]);
+            self.layout_tracker.note_cell_metrics([metrics.width, metrics.height]);
             self.tab_manager.set_cell_metrics_hint(metrics);
-            self.terminal_layout_save_at = Some(std::time::Instant::now());
         }
 
         // Persist the terminal content size (debounced) so new terminals boot at
         // the correct column/row count on the next cold start.
         if let Some(hint) = self.tab_manager.terminal_layout_hint() {
-            let current = [hint.width, hint.height];
-            let changed = self.last_terminal_layout.map_or(true, |prev| {
-                (prev[0] - current[0]).abs() > 1.0 || (prev[1] - current[1]).abs() > 1.0
-            });
-            if changed {
-                self.last_terminal_layout = Some(current);
-                self.terminal_layout_save_at = Some(std::time::Instant::now());
-            }
-            if let Some(when) = self.terminal_layout_save_at {
-                if when.elapsed() > Duration::from_millis(600) {
-                    self.terminal_layout_save_at = None;
-                    self.save_settings();
-                }
+            self.layout_tracker.note_layout([hint.width, hint.height]);
+            if self.layout_tracker.should_flush() {
+                self.save_settings();
             }
         }
 
@@ -868,22 +720,5 @@ impl eframe::App for App {
                 ctx.request_repaint_after(delay);
             }
         }
-    }
-}
-
-impl AppTheme {
-    /// Build egui visuals from this theme. Used during startup and after
-    /// restoring defaults.
-    fn visuals(&self) -> egui::Visuals {
-        let mut visuals = egui::Visuals::dark();
-        let app_bg = self.app_bg_with_opacity();
-        visuals.panel_fill = app_bg;
-        visuals.window_fill = app_bg;
-        visuals.widgets.inactive.bg_fill = app_bg;
-        visuals.widgets.noninteractive.bg_fill = app_bg;
-        visuals.override_text_color = Some(self.panel_text);
-        visuals.selection.bg_fill = self.tab_active_bg;
-        visuals.selection.stroke.color = self.tab_active_bg;
-        visuals
     }
 }

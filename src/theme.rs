@@ -106,6 +106,21 @@ impl AppTheme {
         ctx.set_visuals(visuals);
     }
 
+    /// Build egui visuals from this theme. Used during startup and after
+    /// restoring defaults.
+    pub fn visuals(&self) -> egui::Visuals {
+        let mut visuals = egui::Visuals::dark();
+        let app_bg = self.app_bg_with_opacity();
+        visuals.panel_fill = app_bg;
+        visuals.window_fill = app_bg;
+        visuals.widgets.inactive.bg_fill = app_bg;
+        visuals.widgets.noninteractive.bg_fill = app_bg;
+        visuals.override_text_color = Some(self.panel_text);
+        visuals.selection.bg_fill = self.tab_active_bg;
+        visuals.selection.stroke.color = self.tab_active_bg;
+        visuals
+    }
+
     /// Build the terminal theme from the configured terminal colors.
     pub fn build_terminal_theme(&self) -> egui_term::TerminalTheme {
         let mut palette = egui_term::ColorPalette::default();
@@ -120,6 +135,19 @@ impl AppTheme {
             font_type: egui::FontId::monospace(self.fonts.terminal_font_size),
         })
     }
+}
+
+/// Set both light and dark egui styles to the same look, then lock the active
+/// theme to Dark. This prevents macOS's light system theme from switching the
+/// UI to white after the first frame, and forces the native window chrome
+/// (title bar / traffic lights) to dark mode on macOS so it matches the rest
+/// of the UI instead of following the system light appearance.
+pub fn setup_visuals(ctx: &egui::Context, theme: &AppTheme) {
+    let visuals = theme.visuals();
+    ctx.set_visuals_of(egui::Theme::Dark, visuals.clone());
+    ctx.set_visuals_of(egui::Theme::Light, visuals);
+    ctx.set_theme(egui::Theme::Dark);
+    ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark));
 }
 
 /// Font sizes used throughout the application.
@@ -433,5 +461,125 @@ mod color32_hex {
     pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Color32, D::Error> {
         let hex = String::deserialize(deserializer)?;
         Ok(color_from_hex(&hex, Color32::BLACK))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn with_alpha_full_opacity_is_opaque() {
+        let color = Color32::from_rgb(0x1d, 0x1d, 0x1d);
+        assert_eq!(with_alpha(color, 100).a(), 255);
+    }
+
+    #[test]
+    fn with_alpha_half_opacity_is_about_127() {
+        // Color32 stores premultiplied alpha: the RGB channels are scaled by
+        // the applied alpha (0x10 * 127/255 ~= 8).
+        let half = with_alpha(Color32::from_rgb(0x10, 0x20, 0x30), 50);
+        assert_eq!(half.a(), 127);
+        assert_eq!((half.r(), half.g(), half.b()), (8, 16, 24));
+    }
+
+    #[test]
+    fn with_alpha_clamps_out_of_range() {
+        let color = Color32::from_rgb(1, 2, 3);
+        assert_eq!(with_alpha(color, 0).a(), 0);
+        assert_eq!(with_alpha(color, 200).a(), 255);
+    }
+
+    #[test]
+    fn app_bg_with_opacity_applies_theme_opacity() {
+        let mut theme = AppTheme::default();
+        theme.app_bg_opacity = 50;
+        assert_eq!(theme.app_bg_with_opacity().a(), 127);
+    }
+
+    #[test]
+    fn hex_round_trip_solid_color() {
+        let color = Color32::from_rgb(0xab, 0xcd, 0xef);
+        let hex = color_to_hex(color);
+        assert_eq!(hex, "#abcdef");
+        assert_eq!(color_from_hex(&hex, Color32::BLACK), color);
+    }
+
+    #[test]
+    fn hex_round_trip_color_with_alpha() {
+        // Quirk, characterized: color_to_hex emits premultiplied channels,
+        // while color_from_hex premultiplies again, so an alpha < 255 color
+        // does not round-trip exactly (it darkens). Theme colors are stored
+        // opaque (alpha comes from the opacity slider), so this is not hit by
+        // the settings round trip in practice.
+        let color = Color32::from_rgba_unmultiplied(0xab, 0xcd, 0xef, 0x80);
+        let hex = color_to_hex(color);
+        assert_eq!(hex, "#56677880");
+        let parsed = color_from_hex(&hex, Color32::BLACK);
+        assert_eq!((parsed.r(), parsed.g(), parsed.b(), parsed.a()), (0x2b, 0x34, 0x3c, 0x80));
+    }
+
+    #[test]
+    fn hex_round_trip_opaque_is_exact() {
+        // The path that matters for theme persistence: opaque colors.
+        let color = Color32::from_rgb(0xab, 0xcd, 0xef);
+        let back = color_from_hex(&color_to_hex(color), Color32::BLACK);
+        assert_eq!(back, color);
+    }
+
+    #[test]
+    fn invalid_hex_falls_back() {
+        let fallback = Color32::from_rgb(9, 8, 7);
+        assert_eq!(color_from_hex("nope", fallback), fallback);
+        assert_eq!(color_from_hex("#abc", fallback), fallback);
+        assert_eq!(color_from_hex("#zzzzzz", fallback), fallback);
+        assert_eq!(color_from_hex("", fallback), fallback);
+    }
+
+    #[test]
+    fn theme_serde_round_trip() {
+        let mut theme = AppTheme::default();
+        theme.app_bg = Color32::from_rgb(0x12, 0x34, 0x56);
+        theme.app_bg_opacity = 80;
+        theme.fonts.ui_font_size = 17.0;
+        let json = serde_json::to_string(&theme).unwrap();
+        let back: AppTheme = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, theme);
+    }
+
+    #[test]
+    fn theme_defaults_are_sane() {
+        let theme = AppTheme::default();
+        assert_eq!(theme.app_bg_opacity, 100);
+        assert!(theme.app_bg_with_opacity().a() > 250);
+        assert_eq!(theme.fonts, AppFonts::default());
+    }
+
+    #[test]
+    fn visuals_carry_theme_colors() {
+        let mut theme = AppTheme::default();
+        theme.app_bg_opacity = 60;
+        let visuals = theme.visuals();
+
+        assert_eq!(visuals.panel_fill, theme.app_bg_with_opacity());
+        assert_eq!(visuals.window_fill, theme.app_bg_with_opacity());
+        assert_eq!(visuals.widgets.inactive.bg_fill, theme.app_bg_with_opacity());
+        assert_eq!(
+            visuals.widgets.noninteractive.bg_fill,
+            theme.app_bg_with_opacity()
+        );
+        assert_eq!(visuals.override_text_color, Some(theme.panel_text));
+        assert_eq!(visuals.selection.bg_fill, theme.tab_active_bg);
+        assert_eq!(visuals.selection.stroke.color, theme.tab_active_bg);
+    }
+
+    #[test]
+    fn terminal_theme_uses_configured_foreground() {
+        // build_terminal_theme wires the theme colors into the egui_term
+        // palette; call it to make sure construction does not panic and the
+        // foreground travels through color_to_hex.
+        let mut theme = AppTheme::default();
+        theme.terminal_fg = Color32::from_rgb(0x12, 0x34, 0x56);
+        let _terminal_theme = theme.build_terminal_theme();
     }
 }

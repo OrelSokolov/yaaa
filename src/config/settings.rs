@@ -5,7 +5,7 @@ use crate::theme::AppTheme;
 
 pub const MAX_AGENTS: usize = crate::constants::MAX_AGENTS;
 
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Default, Clone, PartialEq, Eq, Debug)]
 pub struct AgentConfig {
     #[serde(default = "default_agent_name")]
     pub name: String,
@@ -50,7 +50,7 @@ impl AgentConfig {
     }
 }
 
-fn default_agents() -> [AgentConfig; MAX_AGENTS] {
+pub fn default_agents() -> [AgentConfig; MAX_AGENTS] {
     [
         AgentConfig::default_for_index(0),
         AgentConfig::default_for_index(1),
@@ -59,7 +59,7 @@ fn default_agents() -> [AgentConfig; MAX_AGENTS] {
     ]
 }
 
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Settings {
     #[serde(default = "default_show_terminal_lines")]
     pub show_terminal_lines: bool,
@@ -139,6 +139,31 @@ fn default_preload_tabs() -> bool {
     DEFAULT_PRELOAD_TABS
 }
 
+/// Manual `Default` that matches the serde field defaults, so that
+/// `Settings::default()` (used on first launch when no settings file exists)
+/// is equivalent to deserializing an empty settings object. The derived
+/// `Default` used to zero every bool and disable every agent instead.
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            show_terminal_lines: DEFAULT_SHOW_TERMINAL_LINES,
+            show_fps: DEFAULT_SHOW_FPS,
+            show_sidebar: DEFAULT_SHOW_SIDEBAR,
+            show_system_monitor: DEFAULT_SHOW_SYSTEM_MONITOR,
+            show_tab_memory: DEFAULT_SHOW_TAB_MEMORY,
+            run_as_login_shell: DEFAULT_RUN_AS_LOGIN_SHELL,
+            default_shell_cmd: DEFAULT_SHELL_CMD.to_string(),
+            agents: default_agents(),
+            legacy_default_agent_cmd: None,
+            theme: AppTheme::default(),
+            enable_git_status: default_enable_git_status(),
+            preload_tabs: DEFAULT_PRELOAD_TABS,
+            last_terminal_layout: None,
+            last_terminal_cell_metrics: None,
+        }
+    }
+}
+
 impl Settings {
     pub fn load() -> Self {
         let mut settings = if let Some(config_dir) = super::config_dir() {
@@ -160,14 +185,17 @@ impl Settings {
             Settings::default()
         };
 
-        // Migrate legacy single-agent command into the first agent slot.
-        if let Some(legacy_cmd) = settings.legacy_default_agent_cmd.take() {
-            if !legacy_cmd.trim().is_empty() && settings.agents[0].cmd.trim().is_empty() {
-                settings.agents[0].cmd = legacy_cmd;
+        settings.migrate_legacy_agent();
+        settings
+    }
+
+    /// Migrate the legacy single-agent command into the first agent slot.
+    fn migrate_legacy_agent(&mut self) {
+        if let Some(legacy_cmd) = self.legacy_default_agent_cmd.take() {
+            if !legacy_cmd.trim().is_empty() && self.agents[0].cmd.trim().is_empty() {
+                self.agents[0].cmd = legacy_cmd;
             }
         }
-
-        settings
     }
 
     pub fn save(&self) {
@@ -177,5 +205,122 @@ impl Settings {
                 let _ = std::fs::write(&settings_file, settings_json);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn defaults_match_constants() {
+        let s = Settings::default();
+        assert!(s.show_terminal_lines);
+        assert!(s.show_fps);
+        assert!(s.show_sidebar);
+        assert!(s.show_system_monitor);
+        assert!(s.show_tab_memory);
+        assert!(!s.run_as_login_shell);
+        assert_eq!(s.default_shell_cmd, "");
+        assert_eq!(s.theme, AppTheme::default());
+        assert!(s.enable_git_status);
+        assert!(s.preload_tabs);
+        assert_eq!(s.last_terminal_layout, None);
+        assert_eq!(s.last_terminal_cell_metrics, None);
+    }
+
+    #[test]
+    fn default_agents_first_enabled_rest_empty() {
+        let agents = default_agents();
+        assert!(agents[0].enabled);
+        assert_eq!(agents[0].cmd, DEFAULT_AGENT_CMD);
+        assert_eq!(agents[0].name, "Agent");
+        for (i, agent) in agents.iter().enumerate().skip(1) {
+            assert!(!agent.enabled, "agent {i} should be disabled");
+            assert_eq!(agent.cmd, "");
+        }
+    }
+
+    #[test]
+    fn serde_round_trip() {
+        let mut s = Settings::default();
+        s.default_shell_cmd = "/bin/zsh".to_string();
+        s.agents[1].enabled = true;
+        s.agents[1].cmd = "claude".to_string();
+        s.agents[1].name = "Claude".to_string();
+        s.show_sidebar = false;
+        s.last_terminal_layout = Some([640.0, 480.0]);
+
+        let json = serde_json::to_string(&s).unwrap();
+        let back: Settings = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, s);
+    }
+
+    #[test]
+    fn missing_fields_fall_back_to_defaults() {
+        // A settings file written by an old version that only knew about a few
+        // fields must still deserialize into full defaults.
+        let json = r#"{"show_sidebar": false}"#;
+        let s: Settings = serde_json::from_str(json).unwrap();
+        assert!(!s.show_sidebar);
+        assert!(s.show_fps);
+        assert_eq!(s.agents[0].cmd, DEFAULT_AGENT_CMD);
+    }
+
+    #[test]
+    fn legacy_agent_cmd_migrates_into_first_agent() {
+        // Note: the migration only fires when agents[0].cmd is empty in the
+        // file. A file without an `agents` field deserializes agent 0 with the
+        // default "opencode" command, so the legacy value is skipped there.
+        let json = r#"{"default_agent_cmd": "aider", "agents": [
+            {"name": "", "cmd": "", "enabled": false},
+            {"name": "", "cmd": "", "enabled": false},
+            {"name": "", "cmd": "", "enabled": false},
+            {"name": "", "cmd": "", "enabled": false}
+        ]}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        s.migrate_legacy_agent();
+        assert_eq!(s.agents[0].cmd, "aider");
+        assert_eq!(s.legacy_default_agent_cmd, None);
+    }
+
+    #[test]
+    fn legacy_agent_cmd_skipped_when_agents_field_absent() {
+        // Characterizes current behavior: the serde default for agents[0].cmd
+        // is "opencode" (non-empty), so the legacy command does not migrate.
+        let json = r#"{"default_agent_cmd": "aider"}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        s.migrate_legacy_agent();
+        assert_eq!(s.agents[0].cmd, DEFAULT_AGENT_CMD);
+    }
+
+    #[test]
+    fn legacy_agent_cmd_does_not_override_explicit_agent() {
+        let json = r#"{"default_agent_cmd": "aider", "agents": [
+            {"name": "A", "cmd": "claude", "enabled": true},
+            {"name": "", "cmd": "", "enabled": false},
+            {"name": "", "cmd": "", "enabled": false},
+            {"name": "", "cmd": "", "enabled": false}
+        ]}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        s.migrate_legacy_agent();
+        assert_eq!(s.agents[0].cmd, "claude");
+    }
+
+    #[test]
+    fn blank_legacy_agent_cmd_is_ignored() {
+        let json = r#"{"default_agent_cmd": "   "}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        s.migrate_legacy_agent();
+        assert_eq!(s.agents[0].cmd, DEFAULT_AGENT_CMD);
+    }
+
+    #[test]
+    fn legacy_field_is_not_serialized_back() {
+        let json = r#"{"default_agent_cmd": "aider"}"#;
+        let mut s: Settings = serde_json::from_str(json).unwrap();
+        s.migrate_legacy_agent();
+        let out = serde_json::to_string(&s).unwrap();
+        assert!(!out.contains("default_agent_cmd"));
     }
 }

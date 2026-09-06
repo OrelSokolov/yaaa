@@ -2,9 +2,27 @@ use crate::config::settings::{AgentConfig, MAX_AGENTS};
 use crate::menu::apply_menu_style;
 use crate::git_status::GitStatusCache;
 use crate::system_monitor::{format_kb, SystemMonitor};
+use crate::terminal::manager::TabInfo;
 use crate::terminal::{TabManager, TerminalBackendExt};
 use crate::theme::AppTheme;
 use egui::text::{LayoutJob, TextFormat};
+
+/// Sidebar label for one tab, derived on the fly (agent names can change in
+/// the settings without touching the persisted session).
+fn tab_display_name(tab_info: &TabInfo, index: usize, agents: &[AgentConfig; MAX_AGENTS]) -> String {
+    if tab_info.is_important {
+        format!("{}. Important", index + 1)
+    } else if let Some(idx) = tab_info.agent_index {
+        let agent_name = agents
+            .get(idx)
+            .filter(|a| !a.name.trim().is_empty())
+            .map(|a| a.name.clone())
+            .unwrap_or_else(|| format!("Агент {}", idx + 1));
+        format!("{}. {} 💬", index + 1, agent_name)
+    } else {
+        format!("{}. Terminal", index + 1)
+    }
+}
 
 fn copy_to_clipboard(text: &str) {
     if let Ok(mut clipboard) = arboard::Clipboard::new() {
@@ -83,7 +101,7 @@ pub fn show_left_panel(
                             egui::FontId::proportional(theme.fonts.ui_font_size),
                         );
                         ui.add_space(8.0);
-                        if tab_manager.groups.is_empty() {
+                        if !tab_manager.has_groups() {
                             let add_project_btn = ui
                                 .button("➕ Add project")
                                 .on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -97,8 +115,9 @@ pub fn show_left_panel(
 
                         ui.separator();
 
-                        for (group_id, group) in &tab_manager.groups {
-                            let is_selected = active_group_id == Some(*group_id);
+                        for group in tab_manager.iter_groups() {
+                            let group_id = group.id;
+                            let is_selected = active_group_id == Some(group_id);
 
                             ui.horizontal(|ui| {
                                 let centered = ui.centered_and_justified(|ui| {
@@ -127,7 +146,7 @@ pub fn show_left_panel(
 
                                     if response.clicked() {
                                         window_manager
-                                            .rename_group(*group_id, group.name.clone());
+                                            .rename_group(group_id, group.name.clone());
                                     }
 
                                     response
@@ -166,7 +185,7 @@ pub fn show_left_panel(
                                         .clicked()
                                 {
                                     actions.group_actions.push((
-                                        *group_id,
+                                        group_id,
                                         GroupAction::RemoveGroup,
                                     ));
                                 }
@@ -174,9 +193,9 @@ pub fn show_left_panel(
 
                             ui.add_space(10.0);
 
-                            for tab_info in &group.tabs {
+                            for (tab_index, tab_info) in group.tabs.iter().enumerate() {
                                 let tab_id = tab_info.id;
-                                let tab_name = tab_info.display_name.clone();
+                                let tab_name = tab_display_name(tab_info, tab_index, agents);
                                 let is_active = active_tab_id == Some(tab_id);
 
                                 // When the per-tab memory mode is on, show each
@@ -272,7 +291,7 @@ pub fn show_left_panel(
                                     if response.clicked() {
                                         actions
                                             .group_actions
-                                            .push((*group_id, GroupAction::SelectTab(tab_id)));
+                                            .push((group_id, GroupAction::SelectTab(tab_id)));
                                     }
 
                                     response.context_menu(|ui| {
@@ -284,7 +303,7 @@ pub fn show_left_panel(
                                         };
                                         if ui.button(label).clicked() {
                                             actions.group_actions.push((
-                                                *group_id,
+                                                group_id,
                                                 GroupAction::ToggleImportant(tab_id),
                                             ));
                                             ui.close();
@@ -298,7 +317,7 @@ pub fn show_left_panel(
                                     if close_btn.clicked() {
                                         actions
                                             .group_actions
-                                            .push((*group_id, GroupAction::RemoveTab(tab_id)));
+                                            .push((group_id, GroupAction::RemoveTab(tab_id)));
                                     }
                                 });
                             }
@@ -312,7 +331,7 @@ pub fn show_left_panel(
                                     )
                                     .on_hover_cursor(egui::CursorIcon::PointingHand);
                                 if terminal_btn.clicked() {
-                                    actions.add_tab_to_group = Some(*group_id);
+                                    actions.add_tab_to_group = Some(group_id);
                                 }
 
                                 for (idx, agent) in agents.iter().enumerate() {
@@ -343,7 +362,7 @@ pub fn show_left_panel(
                                             "Configure a command for this agent in Agents settings",
                                         );
                                     } else if response.clicked() {
-                                        actions.add_agent_tab_to_group.push((*group_id, idx));
+                                        actions.add_agent_tab_to_group.push((group_id, idx));
                                     }
                                 }
                             });
