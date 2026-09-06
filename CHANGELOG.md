@@ -1,9 +1,13 @@
 # Changelog
 
-## [Unreleased]
+## [0.6.1] - 2026-09-06
 
 ### Added
 - Fuzzy project finder (Ctrl+Shift+O): a Sublime-style palette over the recent projects list with a big search field, live fuzzy matching (name or path), highlighted matched characters, and keyboard navigation (Up/Down to select, Enter to open, Escape to close).
+
+### Fixed
+- Fix git status icons rendering as tofu squares (□) on macOS. The green check mark (U+2713) is missing from every font embedded in egui, and on macOS no system font fallbacks are loaded — only Linux picked it up via fontconfig. Replaced it with U+2714 (heavy check mark), which is covered by egui's built-in NotoEmoji/emoji-icon-font fallbacks, so the icon renders identically on all platforms.
+- Fix `test_compute_git_status_conflicts` failing on machines where `git init` defaults to `main`: the initial branch is now normalized to `master` after init.
 
 ## [0.5.12] - 2026-08-20
 

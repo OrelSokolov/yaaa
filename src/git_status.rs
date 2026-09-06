@@ -29,7 +29,10 @@ impl GitSyncStatus {
     /// Visual icon shown in the UI for this sync state.
     pub fn icon(&self) -> &'static str {
         match self {
-            GitSyncStatus::Clean => "✓",
+            // U+2714 (heavy check mark) instead of U+2713: it is present in
+            // egui's embedded NotoEmoji/emoji-icon-font fallbacks, so the
+            // glyph renders on macOS too, where no system fonts are loaded.
+            GitSyncStatus::Clean => "✔",
             GitSyncStatus::Dirty => "⚠",
             GitSyncStatus::NeedsPush => "⬆",
             GitSyncStatus::NeedsPull => "⬇",
@@ -236,7 +239,7 @@ mod tests {
 
     #[test]
     fn test_icons_and_labels() {
-        assert_eq!(GitSyncStatus::Clean.icon(), "✓");
+        assert_eq!(GitSyncStatus::Clean.icon(), "✔");
         assert_eq!(GitSyncStatus::Dirty.icon(), "⚠");
         assert_eq!(GitSyncStatus::NeedsPush.icon(), "⬆");
         assert_eq!(GitSyncStatus::NeedsPull.icon(), "⬇");
@@ -330,6 +333,8 @@ mod tests {
         let dir = tmp.path();
 
         run_git(dir, &["init", "--quiet"]);
+        // Normalize the initial branch name: newer git defaults to "main".
+        run_git(dir, &["branch", "-m", "master"]);
         run_git(dir, &["config", "user.email", "test@example.com"]);
         run_git(dir, &["config", "user.name", "Test"]);
 
