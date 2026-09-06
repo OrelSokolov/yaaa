@@ -1,33 +1,61 @@
-//! Font setup with optional fontconfig fallback support
+//! Font setup with universal embedded fallback + optional fontconfig support
 //!
-//! On Linux we query fontconfig for extra fallback fonts (Noto, DejaVu, etc.).
-//! On macOS we skip fontconfig entirely: the crate `rust-fontconfig` builds its
-//! cache by scanning system fonts and takes ~3 seconds on macOS while finding
-//! no useful fonts (fontconfig is not the native macOS font stack). egui's
-//! built-in default fonts cover the UI perfectly well on their own.
+//! `Ubuntu-Light` is embedded in the binary from `assets/fonts/` and installed
+//! into both font families on every platform, so glyph coverage (Cyrillic,
+//! etc.) never depends on system fonts — this is the universal fallback.
+//!
+//! On Linux we additionally query fontconfig for extra fallback fonts (Noto,
+//! DejaVu, emoji, ...). On macOS we skip fontconfig entirely: the crate
+//! `rust-fontconfig` builds its cache by scanning system fonts and takes
+//! ~3 seconds on macOS while finding no useful fonts (fontconfig is not the
+//! native macOS font stack).
 
 use egui::{FontData, FontDefinitions, FontFamily};
+#[cfg(not(target_os = "macos"))]
 use std::collections::HashSet;
 use std::sync::Arc;
 
-/// Initialize fonts with optional system fallback.
+/// Ubuntu Light shipped in this repository (Ubuntu Font License, see
+/// `assets/fonts/UFL.txt`). Embedded so the same glyphs render on every
+/// platform even when no system fonts are available.
+const UBUNTU_LIGHT_TTF: &[u8] = include_bytes!("../assets/fonts/Ubuntu-Light.ttf");
+
+/// Name under which the embedded Ubuntu Light is registered in egui.
+const EMBEDDED_FONT_NAME: &str = "Ubuntu-Light";
+
+/// Initialize fonts: embedded universal fallback everywhere, plus system
+/// fallback via fontconfig on platforms where it is useful.
 pub fn setup_fonts_with_fallback(ctx: &egui::Context) {
+    let mut fonts = FontDefinitions::default();
+
+    // Universal embedded fallback: same glyph coverage on every platform.
+    // This replaces egui's bundled copy (same face, but now pinned by this
+    // repository instead of depending on the egui version).
+    fonts.font_data.insert(
+        EMBEDDED_FONT_NAME.to_owned(),
+        Arc::new(FontData::from_static(UBUNTU_LIGHT_TTF)),
+    );
+    for family in [FontFamily::Monospace, FontFamily::Proportional] {
+        let list = fonts.families.entry(family).or_default();
+        if !list.iter().any(|name| name == EMBEDDED_FONT_NAME) {
+            // Append, never prepend: the first family entry defines the look.
+            list.push(EMBEDDED_FONT_NAME.to_owned());
+        }
+    }
+
     #[cfg(target_os = "macos")]
     {
-        log::info!("Using egui default fonts on macOS (fontconfig fallback skipped)");
-        ctx.set_fonts(FontDefinitions::default());
-        return;
+        log::info!("Using egui default fonts + embedded Ubuntu-Light on macOS (fontconfig fallback skipped)");
+        ctx.set_fonts(fonts);
     }
 
     #[cfg(not(target_os = "macos"))]
-    setup_fonts_with_fontconfig(ctx);
+    setup_fonts_with_fontconfig(ctx, fonts);
 }
 
 #[cfg(not(target_os = "macos"))]
-fn setup_fonts_with_fontconfig(ctx: &egui::Context) {
+fn setup_fonts_with_fontconfig(ctx: &egui::Context, mut fonts: FontDefinitions) {
     use rust_fontconfig::FcFontCache;
-
-    let mut fonts = FontDefinitions::default();
 
     // Build the cache once and reuse it for both listing and loading.
     let cache = FcFontCache::build();

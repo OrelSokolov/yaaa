@@ -1,5 +1,4 @@
 *.deb
 *.swp
 target/
-assets/fonts/
 *.sh

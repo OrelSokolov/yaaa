@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- Embed Ubuntu Light into the binary (`assets/fonts/Ubuntu-Light.ttf`, Ubuntu Font License) and register it as a universal glyph fallback for both the monospace and proportional font families on every platform. Cyrillic and other non-Latin glyphs no longer depend on system fonts being present (most notably on macOS, where no fontconfig fallback is loaded at all).
+
 ## [0.6.1] - 2026-09-06
 
 ### Added
