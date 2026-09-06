@@ -2,6 +2,8 @@ use alacritty_terminal::grid::Dimensions;
 use egui_term::{PtyEvent, TerminalBackend, TerminalMode};
 use std::{path::PathBuf, sync::mpsc::Sender};
 
+use crate::terminal::shell_env;
+
 pub trait TerminalBackendExt {
     fn total_lines(&self) -> usize;
     fn screen_lines(&self) -> usize;
@@ -186,9 +188,9 @@ impl Tab {
                     shell: shell.clone(),
                     args: args.clone(),
                     working_directory: working_dir.clone(),
+                    env: shell_env::build(),
                     initial_layout_size: layout_hint,
                     initial_cell_metrics: cell_hint,
-                    ..Default::default()
                 },
             );
 
