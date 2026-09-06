@@ -37,7 +37,7 @@ impl TabGroup {
         }
     }
 
-    pub fn name_from_path(path: &PathBuf) -> String {
+    pub fn name_from_path(path: &std::path::Path) -> String {
         path.file_name()
             .and_then(|n| n.to_str())
             .map(|s| s.to_string())
@@ -46,19 +46,38 @@ impl TabGroup {
 }
 
 /// Read persisted groups from `path`. Returns `None` when the file is missing
-/// or its content cannot be parsed.
+/// or its content cannot be parsed; a corrupt file is preserved as `.bak`.
 pub(crate) fn read_groups_file(path: &std::path::Path) -> Option<Vec<TabGroup>> {
     if !path.exists() {
         return None;
     }
-    let content = std::fs::read_to_string(path).ok()?;
-    serde_json::from_str(&content).ok()
+    let content = match std::fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(e) => {
+            log::warn!("Could not read session file {}: {}", path.display(), e);
+            return None;
+        }
+    };
+    match serde_json::from_str(&content) {
+        Ok(groups) => Some(groups),
+        Err(e) => {
+            log::warn!(
+                "Corrupt session file {}: {} — backing it up, starting fresh",
+                path.display(),
+                e
+            );
+            crate::config::backup_corrupt(path);
+            None
+        }
+    }
 }
 
 /// Persist `groups` to `path` as pretty JSON, ordered by group id.
 pub(crate) fn write_groups_file(path: &std::path::Path, groups: &BTreeMap<u64, TabGroup>) {
     if let Ok(json) = serde_json::to_string_pretty(&groups.values().collect::<Vec<_>>()) {
-        let _ = std::fs::write(path, json);
+        if let Err(e) = crate::config::write_atomic(path, &json) {
+            log::warn!("Could not save session: {}", e);
+        }
     }
 }
 
@@ -120,6 +139,7 @@ impl TabManager {
         if let Some(groups_data) = manager.load_groups() {
             for mut group in groups_data {
                 manager.next_group_id = manager.next_group_id.max(group.id + 1);
+                let mut failed_tab_ids: Vec<u64> = Vec::new();
                 for tab_info in &mut group.tabs {
                     manager.next_tab_id = manager.next_tab_id.max(tab_info.id + 1);
 
@@ -154,7 +174,7 @@ impl TabManager {
                         manager.default_shell_cmd.clone()
                     };
 
-                    let tab = Tab::new(
+                    match Tab::new(
                         cc.egui_ctx.clone(),
                         manager.command_sender.clone(),
                         tab_info.id,
@@ -164,8 +184,18 @@ impl TabManager {
                         !use_agent && manager.run_as_login_shell,
                         manager.terminal_layout_hint,
                         manager.cell_metrics_hint,
-                    );
-                    manager.tabs.insert(tab_info.id, tab);
+                    ) {
+                        Ok(tab) => {
+                            manager.tabs.insert(tab_info.id, tab);
+                        }
+                        Err(e) => {
+                            log::warn!("Skipping tab {}: {}", tab_info.id, e);
+                            failed_tab_ids.push(tab_info.id);
+                        }
+                    }
+                }
+                if !failed_tab_ids.is_empty() {
+                    group.tabs.retain(|t| !failed_tab_ids.contains(&t.id));
                 }
                 manager.groups.insert(group.id, group);
             }
@@ -309,7 +339,7 @@ impl TabManager {
             (false, self.default_shell_cmd.clone())
         };
 
-        let tab = Tab::new(
+        let tab = match Tab::new(
             ctx,
             self.command_sender.clone(),
             tab_id,
@@ -319,7 +349,13 @@ impl TabManager {
             !use_agent && self.run_as_login_shell,
             self.terminal_layout_hint,
             self.cell_metrics_hint,
-        );
+        ) {
+            Ok(tab) => tab,
+            Err(e) => {
+                log::warn!("Failed to add tab to group {}: {}", group_id, e);
+                return;
+            }
+        };
         self.tabs.insert(tab_id, tab);
 
         if let Some(group) = self.groups.get_mut(&group_id) {
@@ -561,7 +597,7 @@ impl TabManager {
         let tab_id = self.next_tab_id;
         self.next_tab_id += 1;
 
-        let tab = Tab::new(
+        let tab = match Tab::new(
             ctx,
             self.command_sender.clone(),
             tab_id,
@@ -571,7 +607,13 @@ impl TabManager {
             !use_agent && self.run_as_login_shell,
             self.terminal_layout_hint,
             self.cell_metrics_hint,
-        );
+        ) {
+            Ok(tab) => tab,
+            Err(e) => {
+                log::warn!("Failed to preload tab for group {}: {}", group_id, e);
+                return;
+            }
+        };
 
         self.preload_pool.insert((group_id, agent_index), (tab_id, tab));
     }

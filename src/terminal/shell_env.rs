@@ -15,10 +15,19 @@
 //! validated against `locale -a` before use.
 
 use std::collections::HashMap;
+use std::sync::OnceLock;
+
+/// Built once and cached: probing the system (`locale -a`, on macOS also
+/// `defaults read`) spawns subprocesses, and tabs are created frequently —
+/// with preloading, dozens per startup. The process environment does not
+/// change while the app runs, so one build is enough.
+static CACHED_ENV: OnceLock<HashMap<String, String>> = OnceLock::new();
 
 /// Builds the PTY environment from the current process environment.
 pub fn build() -> HashMap<String, String> {
-    build_with(read_process_env, system_utf8_locale)
+    CACHED_ENV
+        .get_or_init(|| build_with(read_process_env, system_utf8_locale))
+        .clone()
 }
 
 /// Pure core: terminal defaults plus locale seeding, parameterized by
@@ -169,7 +178,7 @@ mod tests {
         // The inherited value reaches the shell via normal process-env
         // inheritance; the map must not touch it.
         let env = build(&[("LANG", "ru_RU.UTF-8")]);
-        assert!(env.get("LANG").is_none());
+        assert!(!env.contains_key("LANG"));
     }
 
     #[test]
@@ -177,7 +186,7 @@ mod tests {
         for key in ["LC_ALL", "LC_CTYPE", "LANG"] {
             let env = build(&[(key, "de_DE.UTF-8")]);
             assert!(
-                env.get("LANG").is_none() || key == "LANG",
+                !env.contains_key("LANG") || key == "LANG",
                 "{key} should suppress LANG seeding"
             );
         }

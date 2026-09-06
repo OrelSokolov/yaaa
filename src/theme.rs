@@ -123,9 +123,11 @@ impl AppTheme {
 
     /// Build the terminal theme from the configured terminal colors.
     pub fn build_terminal_theme(&self) -> egui_term::TerminalTheme {
-        let mut palette = egui_term::ColorPalette::default();
-        palette.foreground = color_to_hex(self.terminal_fg);
-        palette.background = color_to_hex(self.app_bg_with_opacity());
+        let palette = egui_term::ColorPalette {
+            foreground: color_to_hex(self.terminal_fg),
+            background: color_to_hex(self.app_bg_with_opacity()),
+            ..Default::default()
+        };
         egui_term::TerminalTheme::new(Box::new(palette))
     }
 
@@ -492,8 +494,10 @@ mod tests {
 
     #[test]
     fn app_bg_with_opacity_applies_theme_opacity() {
-        let mut theme = AppTheme::default();
-        theme.app_bg_opacity = 50;
+        let theme = AppTheme {
+            app_bg_opacity: 50,
+            ..Default::default()
+        };
         assert_eq!(theme.app_bg_with_opacity().a(), 127);
     }
 
@@ -538,10 +542,15 @@ mod tests {
 
     #[test]
     fn theme_serde_round_trip() {
-        let mut theme = AppTheme::default();
-        theme.app_bg = Color32::from_rgb(0x12, 0x34, 0x56);
-        theme.app_bg_opacity = 80;
-        theme.fonts.ui_font_size = 17.0;
+        let theme = AppTheme {
+            app_bg: Color32::from_rgb(0x12, 0x34, 0x56),
+            app_bg_opacity: 80,
+            fonts: AppFonts {
+                ui_font_size: 17.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
         let json = serde_json::to_string(&theme).unwrap();
         let back: AppTheme = serde_json::from_str(&json).unwrap();
         assert_eq!(back, theme);
@@ -557,8 +566,10 @@ mod tests {
 
     #[test]
     fn visuals_carry_theme_colors() {
-        let mut theme = AppTheme::default();
-        theme.app_bg_opacity = 60;
+        let theme = AppTheme {
+            app_bg_opacity: 60,
+            ..Default::default()
+        };
         let visuals = theme.visuals();
 
         assert_eq!(visuals.panel_fill, theme.app_bg_with_opacity());
@@ -578,8 +589,10 @@ mod tests {
         // build_terminal_theme wires the theme colors into the egui_term
         // palette; call it to make sure construction does not panic and the
         // foreground travels through color_to_hex.
-        let mut theme = AppTheme::default();
-        theme.terminal_fg = Color32::from_rgb(0x12, 0x34, 0x56);
+        let theme = AppTheme {
+            terminal_fg: Color32::from_rgb(0x12, 0x34, 0x56),
+            ..Default::default()
+        };
         let _terminal_theme = theme.build_terminal_theme();
     }
 }

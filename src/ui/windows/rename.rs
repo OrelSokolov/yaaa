@@ -18,19 +18,25 @@ impl super::WindowManager {
         let mut should_save = false;
         let mut should_close = false;
 
+        let window_id = egui::Id::new("rename_group_window");
+
         egui::Window::new("Rename Group")
+            .id(window_id)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_rename_group)
             .show(ctx, |ui| {
                 egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
                     ui.heading("Rename Group");
                     ui.text_edit_singleline(&mut self.rename_group_name);
-                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    if super::shortcuts_active(ctx, window_id)
+                        && ui.input(|i| i.key_pressed(egui::Key::Escape))
+                    {
                         should_close = true;
                     }
                     ui.horizontal(|ui| {
                         if ui.button("Save").clicked()
-                            || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                            || (super::shortcuts_active(ctx, window_id)
+                                && ui.input(|i| i.key_pressed(egui::Key::Enter)))
                         {
                             should_save = true;
                         }
@@ -57,7 +63,10 @@ impl super::WindowManager {
     pub(super) fn show_missing_folder_window(&mut self, ctx: &egui::Context) {
         let mut ok = false;
 
+        let window_id = egui::Id::new("missing_folder_window");
+
         egui::Window::new("Folder not found")
+            .id(window_id)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_missing_folder)
             .show(ctx, |ui| {
@@ -71,7 +80,8 @@ impl super::WindowManager {
                     if ui
                         .add(egui::Button::new("OK").min_size(egui::vec2(80.0, 32.0)))
                         .clicked()
-                        || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                        || (super::shortcuts_active(ctx, window_id)
+                            && ui.input(|i| i.key_pressed(egui::Key::Enter)))
                     {
                         ok = true;
                     }

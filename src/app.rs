@@ -6,8 +6,8 @@ use crate::terminal::{TabManager, TerminalLayoutTracker};
 use crate::theme::{setup_visuals, AppTheme};
 use crate::ui::{
     show_central_panel, show_debug_panel, show_left_panel, show_menu_bar, show_search_panel,
-    GroupAction, MenuActions, MenuBarView, PanelActions, ProjectFinder, WindowActions,
-    WindowManager,
+    GroupAction, LeftPanelView, MenuActions, MenuBarView, PanelActions, ProjectFinder,
+    WindowActions, WindowManager,
 };
 use egui_term::BackendCommand;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -185,6 +185,20 @@ impl App {
             .add_group_with_path(ctx.clone(), Some(path));
     }
 
+    /// Open a project from the recents list: absent paths are dropped from
+    /// the list and reported through a modal instead of opening anything.
+    fn open_recent_project(&mut self, ctx: &egui::Context, name: &str, path: &std::path::Path) {
+        if path.exists() {
+            self.tab_manager
+                .add_group_with_path(ctx.clone(), Some(path.to_path_buf()));
+        } else {
+            self.recent_projects.remove_project(path);
+            self.save_recent_projects();
+            self.window_manager
+                .missing_folder(format!("{}\n{}", name, path.display()));
+        }
+    }
+
     fn handle_command_events(&mut self) {
         while let Ok((tab_id, event)) = self.command_receiver.try_recv() {
             match event {
@@ -288,18 +302,7 @@ impl App {
         }
 
         if let Some(project) = actions.open_project {
-            if project.path.exists() {
-                self.tab_manager
-                    .add_group_with_path(ctx.clone(), Some(project.path));
-            } else {
-                self.recent_projects.remove_project(&project.path);
-                self.save_recent_projects();
-                self.window_manager.missing_folder(format!(
-                    "{}\n{}",
-                    project.name,
-                    project.path.display()
-                ));
-            }
+            self.open_recent_project(ctx, &project.name, &project.path);
         }
 
         if actions.show_about {
@@ -598,18 +601,7 @@ impl eframe::App for App {
                 self.project_finder
                     .show(&ctx, &projects, &open_paths, &theme)
             {
-                if action.path.exists() {
-                    self.tab_manager
-                        .add_group_with_path(ctx.clone(), Some(action.path));
-                } else {
-                    self.recent_projects.remove_project(&action.path);
-                    self.save_recent_projects();
-                    self.window_manager.missing_folder(format!(
-                        "{}\n{}",
-                        action.name,
-                        action.path.display()
-                    ));
-                }
+                self.open_recent_project(&ctx, &action.name, &action.path);
             }
         }
 
@@ -617,13 +609,15 @@ impl eframe::App for App {
             ui,
             &self.tab_manager,
             &mut self.window_manager,
-            self.show_sidebar,
-            &self.launch_config.agents,
-            &theme,
-            &mut self.git_cache,
-            self.enable_git_status,
-            self.show_tab_memory,
-            &mut self.system_monitor,
+            LeftPanelView {
+                show_sidebar: self.show_sidebar,
+                agents: &self.launch_config.agents,
+                theme: &theme,
+                git_cache: &mut self.git_cache,
+                git_enabled: self.enable_git_status,
+                show_tab_memory: self.show_tab_memory,
+                system_monitor: &mut self.system_monitor,
+            },
         );
 
         show_debug_panel(
@@ -641,6 +635,20 @@ impl eframe::App for App {
 
         self.handle_command_events();
 
+        // Hotkey actions go through the same handler as the sidebar's, so
+        // tab additions and removals have a single path.
+        let mut panel_actions = panel_actions;
+        if let Some(tab_id) = close_tab_id {
+            // RemoveTab resolves the tab by id; the group id slot is unused.
+            panel_actions
+                .group_actions
+                .push((0, GroupAction::RemoveTab(tab_id)));
+        }
+        panel_actions.add_tab_to_group = panel_actions.add_tab_to_group.or(add_tab_to_group);
+        panel_actions
+            .add_agent_tab_to_group
+            .extend(add_agent_tab_to_group);
+
         self.handle_panel_actions(&ctx, panel_actions);
 
         self.poll_folder_pick(&ctx);
@@ -652,20 +660,6 @@ impl eframe::App for App {
         }
 
         self.handle_window_actions(window_actions);
-
-        if let Some(tab_id) = close_tab_id {
-            self.tab_manager.remove(tab_id);
-        }
-
-        if let Some(group_id) = add_tab_to_group {
-            self.tab_manager
-                .add_tab_to_group(group_id, ctx.clone(), None);
-        }
-
-        for (group_id, agent_index) in add_agent_tab_to_group {
-            self.tab_manager
-                .add_tab_to_group(group_id, ctx.clone(), Some(agent_index));
-        }
 
         // One flush per frame covers every mutation above; mutating methods
         // mark the session dirty themselves.
@@ -713,9 +707,9 @@ impl eframe::App for App {
             let viewport = ctx.input(|i| i.viewport().clone());
             if viewport.visible().unwrap_or(true) {
                 let delay = if viewport.focused.unwrap_or(true) {
-                    Duration::from_millis(500)
+                    Duration::from_millis(crate::constants::REPAINT_DELAY_FOCUSED_MS)
                 } else {
-                    Duration::from_millis(1000)
+                    Duration::from_millis(crate::constants::REPAINT_DELAY_UNFOCUSED_MS)
                 };
                 ctx.request_repaint_after(delay);
             }

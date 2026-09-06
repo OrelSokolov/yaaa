@@ -12,3 +12,15 @@ pub const DEFAULT_SHELL_CMD: &str = "";
 pub const DEFAULT_AGENT_CMD: &str = "opencode";
 pub const MAX_AGENTS: usize = 4;
 pub const DEFAULT_PRELOAD_TABS: bool = true;
+
+/// How many recent projects to keep in the Projects menu.
+pub const RECENT_PROJECTS_LIMIT: usize = 20;
+
+/// Repaint cadence while a terminal tab is active.
+pub const REPAINT_DELAY_FOCUSED_MS: u64 = 500;
+pub const REPAINT_DELAY_UNFOCUSED_MS: u64 = 1000;
+
+/// Per-tab memory severity thresholds for the sidebar: yellow above WARN,
+/// red above HIGH.
+pub const TAB_MEM_WARN_KB: u64 = 200 * 1024;
+pub const TAB_MEM_HIGH_KB: u64 = 500 * 1024;

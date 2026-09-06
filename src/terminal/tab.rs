@@ -66,29 +66,6 @@ impl Tab {
             .contains(TerminalMode::ALT_SCREEN)
     }
 
-    pub fn command_exists(cmd: &str) -> bool {
-        // Extract just the program name (first word) from the command
-        let program = cmd.split_whitespace().next().unwrap_or(cmd);
-
-        #[cfg(unix)]
-        {
-            use std::process::Command;
-            if let Ok(output) = Command::new("which").arg(program).output() {
-                output.status.success()
-            } else {
-                false
-            }
-        }
-        #[cfg(windows)]
-        {
-            use std::process::Command;
-            Command::new("where")
-                .arg(program)
-                .output()
-                .map_or(false, |output| output.status.success())
-        }
-    }
-
     fn shell_candidates(shell_cmd: &str, is_agent: bool) -> Vec<String> {
         let mut candidates: Vec<String> = Vec::new();
 
@@ -128,21 +105,18 @@ impl Tab {
             .collect()
     }
 
-    pub fn resolve_shell(shell_cmd: &str, is_agent: bool) -> String {
-        for candidate in Self::shell_candidates(shell_cmd, is_agent) {
-            if Self::command_exists(&candidate) {
-                return candidate;
-            }
+    /// Login-shell flag for a shell program, or `None` for shells that have
+    /// no login mode (the tab then starts as a plain interactive shell).
+    fn login_flag(program: &str) -> Option<&'static str> {
+        let name = std::path::Path::new(program)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(program);
+        match name {
+            "bash" | "zsh" | "sh" | "dash" | "ksh" => Some("--login"),
+            "fish" => Some("-l"),
+            _ => None,
         }
-
-        if !shell_cmd.is_empty() {
-            return shell_cmd.to_string();
-        }
-
-        #[cfg(unix)]
-        return std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        #[cfg(windows)]
-        return "cmd.exe".to_string();
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -156,30 +130,43 @@ impl Tab {
         run_as_login_shell: bool,
         layout_hint: Option<egui_term::Size>,
         cell_hint: Option<egui_term::Size>,
-    ) -> Self {
+    ) -> Result<Self, String> {
         let mut candidates = Self::shell_candidates(shell_cmd, is_agent).into_iter();
 
         // For agents the first candidate is the configured agent command and may
         // include arguments. For regular shells the candidate is just the shell path.
-        let first = candidates
-            .next()
-            .unwrap_or_else(|| Self::resolve_shell("", false));
+        // The candidate list is never empty: the platform fallbacks below always
+        // add at least one shell.
+        let Some(first) = candidates.next() else {
+            return Err(format!("no shell candidates for tab {}", id));
+        };
         let mut shell = first.clone();
-        let mut args: Vec<String> = Vec::new();
+        // For agents the first candidate is the configured agent command and
+        // may include arguments; fallbacks are bare shell paths.
+        let mut agent_args: Vec<String> = Vec::new();
         if is_agent {
             let parts: Vec<&str> = first.split_whitespace().collect();
             if parts.len() > 1 {
                 shell = parts[0].to_string();
-                args = parts[1..].iter().map(|s| s.to_string()).collect();
+                agent_args = parts[1..].iter().map(|s| s.to_string()).collect();
             }
         }
 
-        // Add login shell flag if needed (only for non-agent shells)
-        if run_as_login_shell && !is_agent {
-            args.push("--login".to_string());
-        }
-
+        let mut using_configured_command = true;
         let backend = loop {
+            // Fallback shells run bare; the login flag depends on the shell
+            // actually being started (fish spells it `-l`, nu has none).
+            let mut args: Vec<String> = if using_configured_command {
+                agent_args.clone()
+            } else {
+                Vec::new()
+            };
+            if run_as_login_shell && !is_agent {
+                if let Some(flag) = Self::login_flag(&shell) {
+                    args.push(flag.to_string());
+                }
+            }
+
             let result = TerminalBackend::new(
                 id,
                 ctx.clone(),
@@ -197,26 +184,27 @@ impl Tab {
             match result {
                 Ok(backend) => break backend,
                 Err(e) => {
-                    eprintln!(
+                    log::warn!(
                         "Failed to create terminal backend with shell '{}': {}",
-                        shell, e
+                        shell,
+                        e
                     );
 
                     let Some(next) = candidates.next() else {
-                        panic!("All fallback shells failed. Last error: {}", e);
+                        return Err(format!(
+                            "all fallback shells failed for tab {}: {}",
+                            id, e
+                        ));
                     };
 
-                    // Subsequent fallbacks are bare shell paths; clear agent args.
                     shell = next;
-                    if is_agent {
-                        args.clear();
-                    }
-                    eprintln!("Retrying with fallback shell: {}", shell);
+                    using_configured_command = false;
+                    log::warn!("Retrying with fallback shell: {}", shell);
                 }
             }
         };
 
-        Self {
+        Ok(Self {
             backend,
             title: format!("tab: {}", id),
             scroll_state: TabScrollState::default(),
@@ -225,10 +213,51 @@ impl Tab {
             search_active: false,
             search_query: String::new(),
             search_just_opened: false,
-        }
+        })
     }
 
     pub fn set_title(&mut self, title: String) {
         self.title = title;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detect_clear_triggers_on_line_drop() {
+        let state = ScrollState {
+            last_line_count: 1000,
+            user_scrolled_up: false,
+        };
+        // Fewer than 10% of the previous lines remain.
+        assert!(state.detect_clear(50));
+        // 20% remain — not a clear.
+        assert!(!state.detect_clear(200));
+    }
+
+    #[test]
+    fn detect_clear_ignores_first_frame() {
+        let state = ScrollState::default();
+        assert!(!state.detect_clear(0));
+    }
+
+    #[test]
+    fn login_flag_depends_on_shell() {
+        assert_eq!(Tab::login_flag("/bin/zsh"), Some("--login"));
+        assert_eq!(Tab::login_flag("/usr/bin/bash"), Some("--login"));
+        assert_eq!(Tab::login_flag("sh"), Some("--login"));
+        assert_eq!(Tab::login_flag("fish"), Some("-l"));
+        assert_eq!(Tab::login_flag("nu"), None);
+        assert_eq!(Tab::login_flag("/usr/local/bin/nu"), None);
+    }
+
+    #[test]
+    fn shell_candidates_start_with_configured_command() {
+        let candidates = Tab::shell_candidates("/opt/mysh -x", false);
+        assert_eq!(candidates.first().map(String::as_str), Some("/opt/mysh -x"));
+        // Platform fallbacks are always present.
+        assert!(candidates.len() > 1);
     }
 }

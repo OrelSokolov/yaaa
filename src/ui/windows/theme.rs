@@ -156,7 +156,9 @@ impl super::WindowManager {
 
                     ui.add_space(15.0);
 
-                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    if super::shortcuts_active(ctx, window_id)
+                        && ui.input(|i| i.key_pressed(egui::Key::Escape))
+                    {
                         cancel = true;
                     }
 
@@ -164,7 +166,8 @@ impl super::WindowManager {
                         if ui
                             .add(egui::Button::new("Save").min_size(egui::vec2(80.0, 32.0)))
                             .clicked()
-                            || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                            || (super::shortcuts_active(ctx, window_id)
+                                && ui.input(|i| i.key_pressed(egui::Key::Enter)))
                         {
                             save = true;
                         }

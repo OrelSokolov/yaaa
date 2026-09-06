@@ -79,7 +79,7 @@ impl ProjectFinder {
         }
         // Empty query keeps the recency order of the projects list.
         if !self.query.is_empty() {
-            matched.sort_by(|a, b| b.0.cmp(&a.0));
+            matched.sort_by_key(|(score, _, _)| std::cmp::Reverse(*score));
         }
         if self.selected >= matched.len() {
             self.selected = matched.len().saturating_sub(1);

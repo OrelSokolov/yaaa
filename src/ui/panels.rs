@@ -15,12 +15,22 @@ fn tab_display_name(tab_info: &TabInfo, index: usize, agents: &[AgentConfig; MAX
     } else if let Some(idx) = tab_info.agent_index {
         let agent_name = agents
             .get(idx)
-            .filter(|a| !a.name.trim().is_empty())
-            .map(|a| a.name.clone())
-            .unwrap_or_else(|| format!("Агент {}", idx + 1));
+            .map(|a| agent_display_name(a, idx))
+            .unwrap_or_else(|| format!("Agent {}", idx + 1));
         format!("{}. {} 💬", index + 1, agent_name)
     } else {
         format!("{}. Terminal", index + 1)
+    }
+}
+
+/// Sidebar label for an agent slot, reusing the settings naming when the
+/// user has not configured a name.
+fn agent_display_name(agent: &AgentConfig, idx: usize) -> String {
+    let name = agent.name.trim();
+    if name.is_empty() {
+        AgentConfig::default_for_index(idx).name
+    } else {
+        name.to_string()
     }
 }
 
@@ -40,9 +50,9 @@ fn paste_from_clipboard() -> Option<String> {
 /// Red above 500 MB, yellow above 200 MB, otherwise a placeholder that inherits
 /// the tab's normal (state-based) text color.
 fn mem_color_for(mem_kb: u64) -> egui::Color32 {
-    if mem_kb > 500 * 1024 {
+    if mem_kb > crate::constants::TAB_MEM_HIGH_KB {
         egui::Color32::from_rgb(0xff, 0x55, 0x55)
-    } else if mem_kb > 200 * 1024 {
+    } else if mem_kb > crate::constants::TAB_MEM_WARN_KB {
         egui::Color32::from_rgb(0xff, 0xd6, 0x33)
     } else {
         egui::Color32::PLACEHOLDER
@@ -64,19 +74,34 @@ pub struct PanelActions {
     pub group_actions: Vec<(u64, GroupAction)>,
 }
 
-#[allow(clippy::too_many_arguments)]
+/// App state shown by the sidebar, mirroring `MenuBarView`: everything the
+/// panel reads in one struct instead of a long positional argument list.
+pub struct LeftPanelView<'a> {
+    pub show_sidebar: bool,
+    pub agents: &'a [AgentConfig; MAX_AGENTS],
+    pub theme: &'a AppTheme,
+    pub git_cache: &'a mut GitStatusCache,
+    pub git_enabled: bool,
+    pub show_tab_memory: bool,
+    pub system_monitor: &'a mut SystemMonitor,
+}
+
 pub fn show_left_panel(
     ui: &mut egui::Ui,
     tab_manager: &TabManager,
     window_manager: &mut super::windows::WindowManager,
-    show_sidebar: bool,
-    agents: &[AgentConfig; MAX_AGENTS],
-    theme: &AppTheme,
-    git_cache: &mut GitStatusCache,
-    git_enabled: bool,
-    show_tab_memory: bool,
-    system_monitor: &mut SystemMonitor,
+    view: LeftPanelView<'_>,
 ) -> PanelActions {
+    let LeftPanelView {
+        show_sidebar,
+        agents,
+        theme,
+        git_cache,
+        git_enabled,
+        show_tab_memory,
+        system_monitor,
+    } = view;
+
     let mut actions = PanelActions::default();
 
     let active_group_id = tab_manager.active_group_id;
@@ -156,12 +181,14 @@ pub fn show_left_panel(
                                 // area, drawn on top of the empty right part so the panel does
                                 // not get widened. Skipped entirely when the service is disabled.
                                 if git_enabled {
-                                    let (icon, icon_color) =
+                                    let (icon, icon_color, tooltip) =
                                         match git_cache.get_or_refresh(&group.path) {
-                                            Some(status) => {
-                                                (status.sync_status.icon(), status.sync_status.color())
-                                            }
-                                            None => ("…", theme.panel_text),
+                                            Some(status) => (
+                                                status.sync_status.icon(),
+                                                status.sync_status.color(),
+                                                Some(status.sync_status.label()),
+                                            ),
+                                            None => ("…", theme.panel_text, None),
                                         };
 
                                     let icon_size = theme.fonts.group_name_font_size;
@@ -176,6 +203,17 @@ pub fn show_left_panel(
                                         egui::FontId::proportional(icon_size),
                                         icon_color,
                                     );
+
+                                    // Invisible hover target over the painted
+                                    // icon carrying a human-readable status.
+                                    if let Some(tooltip) = tooltip {
+                                        let icon_rect = egui::Rect::from_center_size(
+                                            egui::pos2(icon_pos.x - 8.0, icon_pos.y),
+                                            egui::vec2(20.0, 20.0),
+                                        );
+                                        ui.allocate_rect(icon_rect, egui::Sense::hover())
+                                            .on_hover_text(tooltip);
+                                    }
                                 }
 
                                 if group.tabs.is_empty()
@@ -338,11 +376,7 @@ pub fn show_left_panel(
                                     if !agent.enabled {
                                         continue;
                                     }
-                                    let name = if agent.name.trim().is_empty() {
-                                        format!("Агент {}", idx + 1)
-                                    } else {
-                                        agent.name.clone()
-                                    };
+                                    let name = agent_display_name(agent, idx);
                                     let has_cmd = !agent.cmd.trim().is_empty();
                                     theme.agent_button.apply_to_visuals(ui);
                                     let button = egui::Button::new(format!("➕ {}", name))
@@ -464,8 +498,7 @@ pub fn show_search_panel(ui: &mut egui::Ui, tab_manager: &mut TabManager, theme:
 }
 
 pub fn show_central_panel(
-    ui: &mut egui::Ui,
-    tab_manager: &mut TabManager,
+    ui: &mut egui::Ui,    tab_manager: &mut TabManager,
     window_manager: &super::windows::WindowManager,
     block_terminal_focus: bool,
     theme: &AppTheme,
@@ -543,8 +576,8 @@ pub fn show_central_panel(
                             let has_selection =
                                 tab.backend.last_content().selectable_range.is_some();
 
-                            if has_selection {
-                                if ui.button("📋 Copy").clicked() {
+                            if has_selection
+                                && ui.button("📋 Copy").clicked() {
                                     let selected_text = tab.backend.selectable_content();
                                     let stripped_text: String = selected_text
                                         .split('\n')
@@ -554,7 +587,6 @@ pub fn show_central_panel(
                                     copy_to_clipboard(&stripped_text);
                                     ui.close();
                                 }
-                            }
                             if ui.button("📝 Paste").clicked() {
                                 if let Some(text) = paste_from_clipboard() {
                                     tab.backend
@@ -588,4 +620,70 @@ pub fn show_central_panel(
                 tab_manager.set_terminal_layout_hint(egui_term::Size::from(layout));
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::constants::{TAB_MEM_HIGH_KB, TAB_MEM_WARN_KB};
+
+    fn tab_info(agent_index: Option<usize>, is_important: bool) -> TabInfo {
+        TabInfo {
+            id: 1,
+            is_agent: agent_index.is_some(),
+            agent_index,
+            is_important,
+        }
+    }
+
+    #[test]
+    fn tab_display_name_variants() {
+        let agents = crate::config::settings::default_agents();
+
+        // Plain terminal tab.
+        assert_eq!(
+            tab_display_name(&tab_info(None, false), 0, &agents),
+            "1. Terminal"
+        );
+
+        // Important tab outranks everything else.
+        assert_eq!(
+            tab_display_name(&tab_info(None, true), 0, &agents),
+            "1. Important"
+        );
+
+        // Agent tab with a configured name.
+        assert_eq!(
+            tab_display_name(&tab_info(Some(0), false), 1, &agents),
+            format!("2. {} 💬", agents[0].name)
+        );
+    }
+
+    #[test]
+    fn agent_display_name_reuses_settings_naming() {
+        let agents = crate::config::settings::default_agents();
+
+        // Empty name falls back to the settings default ("Agent", "Agent 2"...).
+        let mut unnamed = agents[1].clone();
+        unnamed.name = String::new();
+        assert_eq!(agent_display_name(&unnamed, 1), "Agent 2");
+
+        // A configured name wins, whitespace trimmed.
+        let mut named = agents[0].clone();
+        named.name = "  Claude  ".to_string();
+        assert_eq!(agent_display_name(&named, 0), "Claude");
+    }
+
+    #[test]
+    fn mem_color_severity_thresholds() {
+        assert_eq!(mem_color_for(TAB_MEM_WARN_KB), egui::Color32::PLACEHOLDER);
+        assert_eq!(
+            mem_color_for(TAB_MEM_WARN_KB + 1),
+            egui::Color32::from_rgb(0xff, 0xd6, 0x33)
+        );
+        assert_eq!(
+            mem_color_for(TAB_MEM_HIGH_KB + 1),
+            egui::Color32::from_rgb(0xff, 0x55, 0x55)
+        );
+    }
 }

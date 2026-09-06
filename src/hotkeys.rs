@@ -128,3 +128,81 @@ pub fn handle_keyboard_events(ctx: &Context, active_group_exists: bool) -> Keybo
 
     events
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Inject a key press with modifiers into the context without running a
+    /// full egui pass; `key_pressed` scans the raw event list.
+    fn press(ctx: &Context, key: egui::Key, modifiers: egui::Modifiers) {
+        ctx.input_mut(|i| {
+            i.modifiers = modifiers;
+            i.events.push(egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers,
+            });
+        });
+    }
+
+    #[test]
+    fn no_input_produces_no_events() {
+        let ctx = Context::default();
+        let events = handle_keyboard_events(&ctx, true);
+        assert!(!events.switch_to_next_tab);
+        assert!(!events.add_terminal_tab);
+        assert!(events.add_agent_tab.is_none());
+        assert!(!events.close_tab);
+    }
+
+    #[test]
+    fn ctrl_tab_cycles_tabs() {
+        let ctx = Context::default();
+        press(&ctx, egui::Key::Tab, egui::Modifiers::CTRL);
+        let events = handle_keyboard_events(&ctx, true);
+        assert!(events.switch_to_next_tab);
+        assert!(!events.switch_to_prev_tab);
+    }
+
+    #[test]
+    fn ctrl_shift_tab_cycles_back() {
+        let ctx = Context::default();
+        press(&ctx, egui::Key::Tab, egui::Modifiers::CTRL | egui::Modifiers::SHIFT);
+        let events = handle_keyboard_events(&ctx, true);
+        assert!(events.switch_to_prev_tab);
+        assert!(!events.switch_to_next_tab);
+    }
+
+    #[test]
+    fn new_tab_requires_active_group() {
+        let ctx = Context::default();
+        press(&ctx, egui::Key::N, egui::Modifiers::CTRL | egui::Modifiers::SHIFT);
+        assert!(handle_keyboard_events(&ctx, true).add_terminal_tab);
+        assert!(!handle_keyboard_events(&ctx, false).add_terminal_tab);
+    }
+
+    #[test]
+    fn ctrl_shift_a_opens_first_agent_tab() {
+        let ctx = Context::default();
+        press(&ctx, egui::Key::A, egui::Modifiers::CTRL | egui::Modifiers::SHIFT);
+        let events = handle_keyboard_events(&ctx, true);
+        assert_eq!(events.add_agent_tab, Some(0));
+    }
+
+    #[test]
+    fn ctrl_f_toggles_search() {
+        let ctx = Context::default();
+        press(&ctx, egui::Key::F, egui::Modifiers::CTRL);
+        assert!(handle_keyboard_events(&ctx, true).toggle_search);
+    }
+
+    #[test]
+    fn ctrl_shift_q_closes_tab() {
+        let ctx = Context::default();
+        press(&ctx, egui::Key::Q, egui::Modifiers::CTRL | egui::Modifiers::SHIFT);
+        assert!(handle_keyboard_events(&ctx, true).close_tab);
+    }
+}

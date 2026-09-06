@@ -55,7 +55,9 @@ impl super::WindowManager {
 
                     ui.add_space(10.0);
 
-                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    if super::shortcuts_active(ctx, window_id)
+                        && ui.input(|i| i.key_pressed(egui::Key::Escape))
+                    {
                         cancel = true;
                     }
 
@@ -71,7 +73,14 @@ impl super::WindowManager {
             });
 
         if save {
-            actions.agents = Some(self.editing_agents.clone());
+            // Whitespace around names/commands is accidental input, not
+            // configuration; trim it before the draft becomes the config.
+            let mut agents = self.editing_agents.clone();
+            for agent in &mut agents {
+                agent.name = agent.name.trim().to_string();
+                agent.cmd = agent.cmd.trim().to_string();
+            }
+            actions.agents = Some(agents);
             actions.should_save_settings = true;
             self.show_agents_settings = false;
         }

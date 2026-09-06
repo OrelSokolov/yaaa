@@ -2,9 +2,16 @@ use git2::{BranchType, Repository, StatusOptions};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
+
+/// Lock a std Mutex, recovering from poisoning instead of panicking: the data
+/// under the lock is always left in a consistent state (whole-value swaps), so
+/// a guard from a panicked thread is still safe to use.
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 /// Synchronization state of a Git branch relative to its upstream.
 /// Conflicts take precedence over divergence/pull/push because they must be
@@ -55,7 +62,6 @@ impl GitSyncStatus {
     }
 
     /// Short human-readable description, useful for tooltips.
-    #[allow(dead_code)]
     pub fn label(&self) -> &'static str {
         match self {
             GitSyncStatus::Clean => "Up to date",
@@ -165,17 +171,13 @@ impl GitStatusCache {
             .name("git-status-watcher".into())
             .spawn(move || {
                 while !shutdown_clone.load(Ordering::Relaxed) {
-                    let paths: Vec<PathBuf> =
-                        paths_clone.lock().unwrap().iter().cloned().collect();
+                    let paths: Vec<PathBuf> = lock(&paths_clone).iter().cloned().collect();
                     for path in &paths {
                         if shutdown_clone.load(Ordering::Relaxed) {
                             break;
                         }
                         let status = compute_git_status(path);
-                        cache_clone
-                            .lock()
-                            .unwrap()
-                            .insert(path.clone(), status);
+                        lock(&cache_clone).insert(path.clone(), status);
                     }
                     // Sleep in small increments so shutdown is responsive.
                     let mut elapsed = Duration::ZERO;
@@ -203,12 +205,8 @@ impl GitStatusCache {
     /// refresh if not already known. Returns `None` if the path has not been
     /// checked yet or is not a Git repository.
     pub fn get_or_refresh(&self, path: &Path) -> Option<GitStatus> {
-        self.known_paths.lock().unwrap().insert(path.to_path_buf());
-        self.cache
-            .lock()
-            .unwrap()
-            .get(path)
-            .and_then(|opt| opt.clone())
+        lock(&self.known_paths).insert(path.to_path_buf());
+        lock(&self.cache).get(path).cloned().flatten()
     }
 
     /// Remove entries for paths that no longer satisfy `predicate`.
@@ -216,11 +214,8 @@ impl GitStatusCache {
     where
         F: FnMut(&Path) -> bool,
     {
-        self.cache.lock().unwrap().retain(|path, _| predicate(path));
-        self.known_paths
-            .lock()
-            .unwrap()
-            .retain(|path| predicate(path));
+        lock(&self.cache).retain(|path, _| predicate(path));
+        lock(&self.known_paths).retain(|path| predicate(path));
     }
 }
 

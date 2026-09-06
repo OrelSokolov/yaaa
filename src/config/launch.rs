@@ -88,9 +88,11 @@ mod tests {
 
     #[test]
     fn settings_round_trip() {
-        let mut config = TerminalLaunchConfig::default();
-        config.default_shell_cmd = "/bin/zsh".into();
-        config.run_as_login_shell = true;
+        let mut config = TerminalLaunchConfig {
+            default_shell_cmd: "/bin/zsh".into(),
+            run_as_login_shell: true,
+            ..Default::default()
+        };
         config.agents[1] = AgentConfig {
             name: "Claude".into(),
             cmd: "claude".into(),
@@ -105,8 +107,10 @@ mod tests {
 
     #[test]
     fn apply_to_settings_leaves_other_fields_alone() {
-        let mut settings = Settings::default();
-        settings.show_sidebar = false;
+        let mut settings = Settings {
+            show_sidebar: false,
+            ..Default::default()
+        };
         let config = TerminalLaunchConfig::default();
         config.apply_to_settings(&mut settings);
         assert!(!settings.show_sidebar);

@@ -44,13 +44,16 @@ impl super::WindowManager {
 
                     ui.add_space(15.0);
 
-                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    if super::shortcuts_active(ctx, window_id)
+                        && ui.input(|i| i.key_pressed(egui::Key::Escape))
+                    {
                         settings_cancel = true;
                     }
 
                     ui.horizontal(|ui| {
                         if ui.button("Save").clicked()
-                            || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                            || (super::shortcuts_active(ctx, window_id)
+                                && ui.input(|i| i.key_pressed(egui::Key::Enter)))
                         {
                             settings_save = true;
                         }
@@ -62,7 +65,7 @@ impl super::WindowManager {
             });
 
         if settings_save {
-            actions.default_shell_cmd = Some(self.editing_default_shell_cmd.clone());
+            actions.default_shell_cmd = Some(self.editing_default_shell_cmd.trim().to_string());
             actions.run_as_login_shell = Some(self.editing_run_as_login_shell);
             actions.enable_git_status = Some(self.editing_enable_git_status);
             actions.preload_tabs = Some(self.editing_preload_tabs);

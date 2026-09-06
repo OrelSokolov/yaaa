@@ -118,10 +118,17 @@ impl WindowManager {
     }
 }
 
+/// Whether Escape/Enter shortcuts should apply to a settings window: only
+/// when the window itself (or nothing else) holds the keyboard focus, so a
+/// key pressed in a text field, another window, or the terminal does not
+/// trigger them.
+pub(super) fn shortcuts_active(ctx: &egui::Context, window_id: egui::Id) -> bool {
+    ctx.memory(|m| m.focused().is_none_or(|id| id == window_id))
+}
+
 /// Everything the user did in settings windows during this frame.
 #[derive(Default)]
-pub struct WindowActions {
-    pub rename_group: Option<(u64, String)>,
+pub struct WindowActions {    pub rename_group: Option<(u64, String)>,
     pub default_shell_cmd: Option<String>,
     pub agents: Option<[AgentConfig; MAX_AGENTS]>,
     pub run_as_login_shell: Option<bool>,

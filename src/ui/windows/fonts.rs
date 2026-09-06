@@ -61,13 +61,16 @@ impl super::WindowManager {
 
                     ui.add_space(15.0);
 
-                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    if super::shortcuts_active(ctx, window_id)
+                        && ui.input(|i| i.key_pressed(egui::Key::Escape))
+                    {
                         cancel = true;
                     }
 
                     ui.horizontal(|ui| {
                         if ui.button("Save").clicked()
-                            || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                            || (super::shortcuts_active(ctx, window_id)
+                                && ui.input(|i| i.key_pressed(egui::Key::Enter)))
                         {
                             save = true;
                         }

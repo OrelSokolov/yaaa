@@ -166,23 +166,35 @@ impl Default for Settings {
 
 impl Settings {
     pub fn load() -> Self {
-        let mut settings = if let Some(config_dir) = super::config_dir() {
-            let settings_file = config_dir.join(SETTINGS_FILE);
-            if settings_file.exists() {
-                if let Ok(content) = std::fs::read_to_string(&settings_file) {
-                    if let Ok(settings) = serde_json::from_str::<Settings>(&content) {
-                        settings
-                    } else {
+        let mut settings = match super::config_dir() {
+            Some(config_dir) => {
+                let settings_file = config_dir.join(SETTINGS_FILE);
+                match std::fs::read_to_string(&settings_file) {
+                    Ok(content) => match serde_json::from_str::<Settings>(&content) {
+                        Ok(settings) => settings,
+                        Err(e) => {
+                            log::warn!(
+                                "Corrupt settings file {}: {} — backing it up, using defaults",
+                                settings_file.display(),
+                                e
+                            );
+                            super::backup_corrupt(&settings_file);
+                            Settings::default()
+                        }
+                    },
+                    Err(e) => {
+                        if settings_file.exists() {
+                            log::warn!(
+                                "Could not read settings file {}: {}",
+                                settings_file.display(),
+                                e
+                            );
+                        }
                         Settings::default()
                     }
-                } else {
-                    Settings::default()
                 }
-            } else {
-                Settings::default()
             }
-        } else {
-            Settings::default()
+            None => Settings::default(),
         };
 
         settings.migrate_legacy_agent();
@@ -202,7 +214,9 @@ impl Settings {
         if let Some(config_dir) = super::config_dir() {
             let settings_file = config_dir.join(SETTINGS_FILE);
             if let Ok(settings_json) = serde_json::to_string_pretty(self) {
-                let _ = std::fs::write(&settings_file, settings_json);
+                if let Err(e) = super::write_atomic(&settings_file, &settings_json) {
+                    log::warn!("Could not save settings: {}", e);
+                }
             }
         }
     }
@@ -243,13 +257,15 @@ mod tests {
 
     #[test]
     fn serde_round_trip() {
-        let mut s = Settings::default();
-        s.default_shell_cmd = "/bin/zsh".to_string();
+        let mut s = Settings {
+            default_shell_cmd: "/bin/zsh".to_string(),
+            show_sidebar: false,
+            last_terminal_layout: Some([640.0, 480.0]),
+            ..Default::default()
+        };
         s.agents[1].enabled = true;
         s.agents[1].cmd = "claude".to_string();
         s.agents[1].name = "Claude".to_string();
-        s.show_sidebar = false;
-        s.last_terminal_layout = Some([640.0, 480.0]);
 
         let json = serde_json::to_string(&s).unwrap();
         let back: Settings = serde_json::from_str(&json).unwrap();
