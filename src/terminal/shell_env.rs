@@ -230,9 +230,16 @@ mod tests {
 
     #[test]
     fn unknown_language_falls_back_to_system_default() {
-        let expected = default_locale_name();
+        let available = ["C.UTF-8", "de_DE.UTF-8", "en_US.UTF-8"].map(String::from);
+        assert_eq!(pick_utf8_locale(Some("xx_XX"), &available), "C.UTF-8");
+    }
+
+    #[test]
+    fn unknown_language_default_missing_takes_first_utf8() {
+        // C.UTF-8 is not installed here, so the first installed UTF-8
+        // locale must win instead of an unvalidated system default.
         let available = ["de_DE.UTF-8", "en_US.UTF-8"].map(String::from);
-        assert_eq!(pick_utf8_locale(Some("xx_XX"), &available), expected);
+        assert_eq!(pick_utf8_locale(Some("xx_XX"), &available), "de_DE.UTF-8");
     }
 
     #[test]
