@@ -3,9 +3,12 @@
 ## [Unreleased]
 
 ### Added
+- Font Settings: system font selection. The dialog now lists installed system fonts (via fontconfig) in two combo boxes — a proportional face for the UI and a monospace face for the terminal. Selected fonts are loaded from the system and placed at the front of the egui Proportional/Monospace families, persisted in settings, and honored at startup. "Default" keeps the embedded faces. The fontconfig cache is built once and shared between fallback loading, selection and the dialog listing. On macOS the selection is unavailable (fontconfig is skipped there) and the dialog says so.
 - Welcome window: a first-run overview of the main features (sidebar, agent buttons, git status, system monitor, hotkeys, search) with live on/off toggle buttons for the toggleable ones, a "Show this window at startup" toggle, and a Help → Welcome menu item to reopen it.
 
 ### Changed
+- Font Settings layout: each font-size label now sits on its own line above the slider instead of sharing a row with it.
+- Embed two more fonts into the binary: `InterVariable` becomes the primary UI (proportional) font, and `NotoEmoji-Regular` (full monochrome emoji coverage) is pinned from this repository instead of relying on egui's bundled copy — alongside the already-embedded Ubuntu Light. UI text and emoji now render identically on every platform without any system fonts. Color emoji fonts (NotoColorEmoji & Co.) are CBDT bitmaps which epaint/ab_glyph cannot rasterize, so monochrome NotoEmoji is the fullest emoji coverage that actually renders.
 - Embed Ubuntu Light into the binary (`assets/fonts/Ubuntu-Light.ttf`, Ubuntu Font License) and register it as a universal glyph fallback for both the monospace and proportional font families on every platform. Cyrillic and other non-Latin glyphs no longer depend on system fonts being present (most notably on macOS, where no fontconfig fallback is loaded at all).
 
 ## [0.6.1] - 2026-09-06

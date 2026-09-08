@@ -197,7 +197,7 @@ impl super::WindowManager {
         }
 
         if save {
-            actions.theme = Some(self.editing_theme);
+            actions.theme = Some(self.editing_theme.clone());
             actions.should_save_settings = true;
             self.show_theme_settings = false;
         }

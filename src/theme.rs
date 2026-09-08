@@ -6,7 +6,7 @@ pub const DEFAULT_TERMINAL_FG: Color32 = Color32::from_rgb(0xd8, 0xd8, 0xd8);
 
 /// Application-wide theme colors and fonts. Stored in `Settings` and editable
 /// through the "Theme" and "Fonts" settings windows.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppTheme {
     /// Background for the menu bar, panels, window fill and terminal.
     #[serde(with = "color32_hex")]
@@ -152,8 +152,9 @@ pub fn setup_visuals(ctx: &egui::Context, theme: &AppTheme) {
     ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark));
 }
 
-/// Font sizes used throughout the application.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// Font configuration used throughout the application: sizes plus optional
+/// system font faces selected in the Font Settings dialog.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppFonts {
     /// General UI font size (menu, buttons, body text).
     #[serde(default = "default_ui_font_size")]
@@ -167,6 +168,14 @@ pub struct AppFonts {
     /// Terminal font size.
     #[serde(default = "default_terminal_font_size")]
     pub terminal_font_size: f32,
+    /// System font face used for the UI (proportional family). `None` means
+    /// the embedded default (Inter).
+    #[serde(default)]
+    pub ui_font_name: Option<String>,
+    /// System font face used for the terminal (monospace family). `None`
+    /// means the embedded default.
+    #[serde(default)]
+    pub terminal_font_name: Option<String>,
 }
 
 fn default_ui_font_size() -> f32 {
@@ -192,13 +201,23 @@ impl Default for AppFonts {
             group_name_font_size: default_group_name_font_size(),
             tab_font_size: default_tab_font_size(),
             terminal_font_size: default_terminal_font_size(),
+            ui_font_name: None,
+            terminal_font_name: None,
         }
     }
 }
 
 impl AppFonts {
-    /// Apply the configured font sizes to the global egui style.
+    /// Apply the configured font faces and sizes to the global egui style.
+    /// Faces are registered into the egui font definitions first (selected
+    /// system fonts go to the front of their families), then the text-style
+    /// sizes are updated.
     pub fn apply(&self, ctx: &egui::Context) {
+        crate::font_setup::apply_font_definitions(
+            ctx,
+            self.ui_font_name.as_deref(),
+            self.terminal_font_name.as_deref(),
+        );
         let mut style = ctx.global_style().as_ref().clone();
         let proportional = egui::FontFamily::Proportional;
         style.text_styles.insert(
@@ -225,12 +244,10 @@ impl AppFonts {
     }
 }
 
-/// Render a label plus a font-size slider.
+/// Render a label with the font-size slider on the next line below it.
 pub fn font_size_slider(ui: &mut egui::Ui, label: &str, size: &mut f32) {
-    ui.horizontal(|ui| {
-        ui.label(label);
-        ui.add(egui::Slider::new(size, 10.0..=30.0).text("px"));
-    });
+    ui.label(label);
+    ui.add(egui::Slider::new(size, 10.0..=30.0).text("px"));
 }
 
 /// Colors for one class of action buttons (close, agent or terminal).
@@ -538,6 +555,25 @@ mod tests {
         assert_eq!(color_from_hex("#abc", fallback), fallback);
         assert_eq!(color_from_hex("#zzzzzz", fallback), fallback);
         assert_eq!(color_from_hex("", fallback), fallback);
+    }
+
+    #[test]
+    fn fonts_serde_round_trip_with_selected_faces() {
+        let fonts = AppFonts {
+            ui_font_name: Some("Noto Sans".to_string()),
+            terminal_font_name: Some("JetBrains Mono".to_string()),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&fonts).unwrap();
+        let back: AppFonts = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, fonts);
+    }
+
+    #[test]
+    fn fonts_defaults_use_embedded_faces() {
+        let fonts = AppFonts::default();
+        assert_eq!(fonts.ui_font_name, None);
+        assert_eq!(fonts.terminal_font_name, None);
     }
 
     #[test]

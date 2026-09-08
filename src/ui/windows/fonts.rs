@@ -1,4 +1,5 @@
 use super::WindowActions;
+use crate::font_setup;
 use crate::theme::{font_size_slider, AppFonts};
 
 impl super::WindowManager {
@@ -39,6 +40,34 @@ impl super::WindowManager {
                         "Terminal font size",
                         &mut self.editing_fonts.terminal_font_size,
                     );
+
+                    ui.add_space(10.0);
+
+                    let system = font_setup::system_fonts();
+                    if system.all.is_empty() {
+                        ui.label(
+                            egui::RichText::new(
+                                "System font selection is not available on this platform.",
+                            )
+                            .weak(),
+                        );
+                    } else {
+                        ui.label("UI font");
+                        font_combo(
+                            ui,
+                            "ui_font_combo",
+                            &mut self.editing_fonts.ui_font_name,
+                            &system.all,
+                        );
+                        ui.add_space(4.0);
+                        ui.label("Terminal font");
+                        font_combo(
+                            ui,
+                            "terminal_font_combo",
+                            &mut self.editing_fonts.terminal_font_name,
+                            &system.monospace,
+                        );
+                    }
 
                     ui.add_space(15.0);
 
@@ -97,7 +126,7 @@ impl super::WindowManager {
         }
 
         if save {
-            actions.fonts = Some(self.editing_fonts);
+            actions.fonts = Some(self.editing_fonts.clone());
             actions.should_save_settings = true;
             self.show_font_settings = false;
         }
@@ -108,4 +137,19 @@ impl super::WindowManager {
             self.show_font_settings = false;
         }
     }
+}
+
+/// A combo box for picking a system font face. `None` selects the embedded
+/// default face.
+fn font_combo(ui: &mut egui::Ui, id: &str, selected: &mut Option<String>, available: &[String]) {
+    let selected_text = selected.clone().unwrap_or_else(|| "Default".to_string());
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(selected_text)
+        .width(260.0)
+        .show_ui(ui, |ui| {
+            ui.selectable_value(selected, None, "Default");
+            for name in available {
+                ui.selectable_value(selected, Some(name.clone()), name);
+            }
+        });
 }

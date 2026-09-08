@@ -55,7 +55,8 @@ pub struct WindowManager {
 
 impl WindowManager {
     pub fn new(theme: AppTheme) -> Self {
-        let editing_fonts = theme.fonts;
+        let editing_fonts = theme.fonts.clone();
+        let last_applied_opacity = theme.app_bg_opacity;
         Self {
             show_about: false,
             show_hotkeys: false,
@@ -87,7 +88,7 @@ impl WindowManager {
             was_agents_settings_open: false,
             was_theme_settings_open: false,
             was_font_settings_open: false,
-            last_applied_opacity: theme.app_bg_opacity,
+            last_applied_opacity,
         }
     }
 
@@ -110,12 +111,12 @@ impl WindowManager {
 
     /// Seed the theme draft from the applied theme.
     pub fn begin_theme_edit(&mut self, theme: &AppTheme) {
-        self.editing_theme = *theme;
+        self.editing_theme = theme.clone();
     }
 
     /// Seed the fonts draft from the applied theme fonts.
     pub fn begin_font_edit(&mut self, fonts: &AppFonts) {
-        self.editing_fonts = *fonts;
+        self.editing_fonts = fonts.clone();
     }
 
     /// Seed the welcome window draft from the applied theme and the current

@@ -52,7 +52,7 @@ pub struct MenuActions {
 
 pub fn show_menu_bar(ui: &mut egui::Ui, view: MenuBarView<'_>) -> MenuActions {
     let mut actions = MenuActions::default();
-    let theme = *view.theme;
+    let theme = view.theme.clone();
 
     egui::Panel::top("menu_bar")
         .frame(egui::Frame {

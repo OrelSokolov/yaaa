@@ -53,16 +53,14 @@ pub struct App {
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let settings = Settings::load();
-        let theme = settings.theme;
+        let theme = settings.theme.clone();
 
         // Force dark theme on all platforms so the UI stays consistent
         // regardless of the system light/dark appearance.
         setup_visuals(&cc.egui_ctx, &theme);
 
-        // Setup fonts with optional system fallback
-        crate::font_setup::setup_fonts_with_fallback(&cc.egui_ctx);
-
-        // Apply the configured font sizes on top of the default font definitions.
+        // Apply the configured font faces and sizes (embedded defaults plus
+        // any selected system fonts and fontconfig fallbacks).
         theme.fonts.apply(&cc.egui_ctx);
 
         let (command_sender, command_receiver) = mpsc::channel();
@@ -88,7 +86,7 @@ impl App {
             cell_metrics_hint,
         );
 
-        let window_manager = WindowManager::new(theme);
+        let window_manager = WindowManager::new(theme.clone());
 
         let recent_projects = RecentProjects::load();
 
@@ -150,7 +148,7 @@ impl App {
             show_system_monitor: self.show_system_monitor,
             show_tab_memory: self.show_tab_memory,
             legacy_default_agent_cmd: None,
-            theme: self.theme,
+            theme: self.theme.clone(),
             enable_git_status: self.enable_git_status,
             show_welcome: self.show_welcome,
             last_terminal_layout: self.layout_tracker.last_layout(),
@@ -560,7 +558,8 @@ impl eframe::App for App {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         let color = self
             .preview_theme
-            .unwrap_or(self.theme)
+            .as_ref()
+            .unwrap_or(&self.theme)
             .app_bg_with_opacity();
         let a = color.a() as f32 / 255.0;
         // Return straight (unmultiplied) alpha so the compositor blends the
@@ -589,7 +588,7 @@ impl eframe::App for App {
             let opacity = self.window_manager.editing_theme.app_bg_opacity;
             if opacity != self.window_manager.last_applied_opacity {
                 self.window_manager.last_applied_opacity = opacity;
-                self.preview_theme = Some(self.window_manager.editing_theme);
+                self.preview_theme = Some(self.window_manager.editing_theme.clone());
                 let transparent = opacity < 100;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Transparent(transparent));
                 ctx.request_repaint();
@@ -598,7 +597,7 @@ impl eframe::App for App {
             self.preview_theme = None;
         }
 
-        let theme = *self.effective_theme();
+        let theme = self.effective_theme().clone();
 
         // Sample the system monitor once per frame. `memory()` refreshes at
         // most every second; the per-tab sum walks process trees (cached, so it
