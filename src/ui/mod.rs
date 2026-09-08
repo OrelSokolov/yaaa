@@ -2,6 +2,7 @@ pub mod debug;
 pub mod menu_bar;
 pub mod panels;
 pub mod project_finder;
+pub mod screen;
 pub mod windows;
 
 pub use debug::show_debug_panel;

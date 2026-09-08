@@ -101,6 +101,7 @@ Works on macOS, Linux, and Windows with one-click install.
 
 ### UI / UX
 - Collapsible sidebar (show/hide)
+- Welcome window with a feature overview and live feature toggles (shown at startup, reopenable from Help)
 - Exit confirmation dialog
 - Hotkeys reference window
 - About window with version info

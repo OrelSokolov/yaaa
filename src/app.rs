@@ -31,6 +31,8 @@ pub struct App {
     cached_terminal_font: egui_term::TerminalFont,
     git_cache: GitStatusCache,
     enable_git_status: bool,
+    /// Persisted preference: show the welcome window on every startup.
+    show_welcome: bool,
     /// Single source of truth for how new terminals are spawned. `Settings`
     /// is its serialized form; `TabManager` and the settings dialogs hold
     /// copies synced through `update_launch_config`.
@@ -94,7 +96,7 @@ impl App {
 
         let cached_terminal_theme = theme.build_terminal_theme();
 
-        Self {
+        let mut app = Self {
             _command_sender: command_sender,
             command_receiver,
             tab_manager,
@@ -112,6 +114,7 @@ impl App {
             cached_terminal_font,
             git_cache,
             enable_git_status: settings.enable_git_status,
+            show_welcome: settings.show_welcome,
             launch_config,
             system_monitor: SystemMonitor::new(),
             preview_theme: None,
@@ -121,7 +124,22 @@ impl App {
                 settings.last_terminal_cell_metrics,
             ),
             folder_pick: None,
+        };
+
+        // First run / "show at startup": open the welcome tour seeded with
+        // the current feature states.
+        if app.show_welcome {
+            app.window_manager.begin_welcome_edit(
+                &app.theme,
+                app.show_sidebar,
+                app.enable_git_status,
+                app.show_system_monitor,
+                app.show_welcome,
+            );
+            app.window_manager.show_welcome_window = true;
         }
+
+        app
     }
 
     fn save_settings(&self) {
@@ -134,6 +152,7 @@ impl App {
             legacy_default_agent_cmd: None,
             theme: self.theme,
             enable_git_status: self.enable_git_status,
+            show_welcome: self.show_welcome,
             last_terminal_layout: self.layout_tracker.last_layout(),
             last_terminal_cell_metrics: self.layout_tracker.last_cell_metrics(),
             ..Default::default()
@@ -328,6 +347,16 @@ impl App {
         if actions.show_hotkeys {
             self.window_manager.show_hotkeys = true;
         }
+        if actions.show_welcome {
+            self.window_manager.begin_welcome_edit(
+                &self.theme,
+                self.show_sidebar,
+                self.enable_git_status,
+                self.show_system_monitor,
+                self.show_welcome,
+            );
+            self.window_manager.show_welcome_window = true;
+        }
 
         if actions.toggle_git_status {
             self.enable_git_status = !self.enable_git_status;
@@ -453,6 +482,26 @@ impl App {
 
         if let Some(enable_git_status) = actions.enable_git_status {
             self.enable_git_status = enable_git_status;
+        }
+
+        if let Some(show_sidebar) = actions.welcome_sidebar {
+            self.show_sidebar = show_sidebar;
+            self.save_settings();
+        }
+
+        if let Some(enable_git_status) = actions.welcome_git_status {
+            self.enable_git_status = enable_git_status;
+            self.save_settings();
+        }
+
+        if let Some(show_system_monitor) = actions.welcome_system_monitor {
+            self.show_system_monitor = show_system_monitor;
+            self.save_settings();
+        }
+
+        if let Some(show_welcome) = actions.welcome_show_at_startup {
+            self.show_welcome = show_welcome;
+            self.save_settings();
         }
 
         if let Some(preload_tabs) = actions.preload_tabs {

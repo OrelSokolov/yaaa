@@ -40,6 +40,7 @@ pub struct MenuActions {
     pub show_terminal_settings: bool,
     pub show_agents_settings: bool,
     pub show_hotkeys: bool,
+    pub show_welcome: bool,
     pub toggle_git_status: bool,
     pub toggle_preload_tabs: bool,
     pub toggle_system_monitor: bool,
@@ -197,6 +198,10 @@ pub fn show_menu_bar(ui: &mut egui::Ui, view: MenuBarView<'_>) -> MenuActions {
                         });
                         ui.menu_button("Help", |ui| {
                             apply_menu_style(ui, theme.fonts.ui_font_size);
+                            if ui.button("👋 Welcome").clicked() {
+                                actions.show_welcome = true;
+                                ui.close();
+                            }
                             if ui.button("⌘ Hotkeys").clicked() {
                                 actions.show_hotkeys = true;
                                 ui.close();

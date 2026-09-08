@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- Welcome window: a first-run overview of the main features (sidebar, agent buttons, git status, system monitor, hotkeys, search) with live on/off toggle buttons for the toggleable ones, a "Show this window at startup" toggle, and a Help → Welcome menu item to reopen it.
+
 ### Changed
 - Embed Ubuntu Light into the binary (`assets/fonts/Ubuntu-Light.ttf`, Ubuntu Font License) and register it as a universal glyph fallback for both the monospace and proportional font families on every platform. Cyrillic and other non-Latin glyphs no longer depend on system fonts being present (most notably on macOS, where no fontconfig fallback is loaded at all).
 

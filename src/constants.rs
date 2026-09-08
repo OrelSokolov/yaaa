@@ -12,6 +12,7 @@ pub const DEFAULT_SHELL_CMD: &str = "";
 pub const DEFAULT_AGENT_CMD: &str = "opencode";
 pub const MAX_AGENTS: usize = 4;
 pub const DEFAULT_PRELOAD_TABS: bool = true;
+pub const DEFAULT_SHOW_WELCOME: bool = true;
 
 /// How many recent projects to keep in the Projects menu.
 pub const RECENT_PROJECTS_LIMIT: usize = 20;

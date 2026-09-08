@@ -87,6 +87,9 @@ pub struct Settings {
     pub enable_git_status: bool,
     #[serde(default = "default_preload_tabs")]
     pub preload_tabs: bool,
+    /// Show the welcome/features overview window on startup.
+    #[serde(default = "default_show_welcome")]
+    pub show_welcome: bool,
     /// Last known terminal content size [width, height] in pixels. Used to seed
     /// new terminals at the correct column/row count on startup so the PTY does
     /// not boot at the 80x50 default and resize on the first frame.
@@ -139,6 +142,10 @@ fn default_preload_tabs() -> bool {
     DEFAULT_PRELOAD_TABS
 }
 
+fn default_show_welcome() -> bool {
+    DEFAULT_SHOW_WELCOME
+}
+
 /// Manual `Default` that matches the serde field defaults, so that
 /// `Settings::default()` (used on first launch when no settings file exists)
 /// is equivalent to deserializing an empty settings object. The derived
@@ -158,6 +165,7 @@ impl Default for Settings {
             theme: AppTheme::default(),
             enable_git_status: default_enable_git_status(),
             preload_tabs: DEFAULT_PRELOAD_TABS,
+            show_welcome: DEFAULT_SHOW_WELCOME,
             last_terminal_layout: None,
             last_terminal_cell_metrics: None,
         }

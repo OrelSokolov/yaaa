@@ -4,14 +4,25 @@ mod fonts;
 mod rename;
 mod settings;
 mod theme;
+mod welcome;
 
 use crate::config::settings::{AgentConfig, MAX_AGENTS};
 use crate::config::TerminalLaunchConfig;
-use crate::theme::{AppFonts, AppTheme};
+use crate::theme::{AppButtonStyle, AppFonts, AppTheme};
 
 pub struct WindowManager {
     pub show_about: bool,
     pub show_hotkeys: bool,
+    pub show_welcome_window: bool,
+    was_welcome_open: bool,
+    // Draft state for the welcome window, seeded from the owning state when
+    // the window opens (begin_welcome_edit). Toggles apply immediately and
+    // are reported through WindowActions in the same frame.
+    welcome_sidebar: bool,
+    welcome_git_status: bool,
+    welcome_system_monitor: bool,
+    welcome_show_at_startup: bool,
+    welcome_toggle_style: AppButtonStyle,
     pub show_settings: bool,
     pub show_agents_settings: bool,
     pub show_theme_settings: bool,
@@ -48,6 +59,13 @@ impl WindowManager {
         Self {
             show_about: false,
             show_hotkeys: false,
+            show_welcome_window: false,
+            was_welcome_open: false,
+            welcome_sidebar: false,
+            welcome_git_status: false,
+            welcome_system_monitor: false,
+            welcome_show_at_startup: true,
+            welcome_toggle_style: theme.agent_button,
             show_settings: false,
             show_agents_settings: false,
             show_theme_settings: false,
@@ -100,12 +118,30 @@ impl WindowManager {
         self.editing_fonts = *fonts;
     }
 
+    /// Seed the welcome window draft from the applied theme and the current
+    /// feature states. `show_at_startup` is the persisted preference.
+    pub fn begin_welcome_edit(
+        &mut self,
+        theme: &AppTheme,
+        show_sidebar: bool,
+        enable_git_status: bool,
+        show_system_monitor: bool,
+        show_at_startup: bool,
+    ) {
+        self.welcome_sidebar = show_sidebar;
+        self.welcome_git_status = enable_git_status;
+        self.welcome_system_monitor = show_system_monitor;
+        self.welcome_show_at_startup = show_at_startup;
+        self.welcome_toggle_style = theme.agent_button;
+    }
+
     /// Render all open windows and collect what the user did in them.
     pub fn show(&mut self, ctx: &egui::Context) -> WindowActions {
         let mut actions = WindowActions::default();
 
         self.show_about_window(ctx);
         self.show_hotkeys_window(ctx);
+        self.show_welcome_window(ctx, &mut actions);
         self.show_rename_group_window(ctx, &mut actions);
         self.show_settings_window(ctx, &mut actions);
         self.show_agents_settings_window(ctx, &mut actions);
@@ -136,6 +172,10 @@ pub struct WindowActions {    pub rename_group: Option<(u64, String)>,
     pub preload_tabs: Option<bool>,
     pub theme: Option<AppTheme>,
     pub fonts: Option<AppFonts>,
+    pub welcome_sidebar: Option<bool>,
+    pub welcome_git_status: Option<bool>,
+    pub welcome_system_monitor: Option<bool>,
+    pub welcome_show_at_startup: Option<bool>,
     /// Theme window closed without saving: undo the live preview.
     pub theme_discarded: bool,
     /// Font window closed without saving: undo any applied preview.
