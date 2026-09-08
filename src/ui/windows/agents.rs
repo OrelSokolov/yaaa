@@ -37,6 +37,7 @@ impl super::WindowManager {
 
                                         ui.horizontal(|ui| {
                                             ui.checkbox(&mut agent.enabled, "Enabled");
+                                            ui.checkbox(&mut agent.wrap_login_shell, "Wrap with login shell");
                                         });
 
                                         ui.horizontal(|ui| {

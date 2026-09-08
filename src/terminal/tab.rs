@@ -119,6 +119,56 @@ impl Tab {
         }
     }
 
+    /// Wrap an agent command so it runs inside the user's login shell.
+    /// A directly exec'd agent never goes through a shell, so user rc files
+    /// (.bashrc, .profile — PATH setup from nvm and the like) never run.
+    /// Returns `None` when the setting is off, or on Windows where no login
+    /// shell exists and agent `.cmd`/`.exe` commands must spawn directly.
+    fn login_shell_wrapper(
+        enabled: bool,
+        agent_cmd: &str,
+    ) -> Option<(String, Vec<String>)> {
+        if !enabled || !cfg!(unix) {
+            return None;
+        }
+        Self::wrapper_shell().map(|shell| {
+            (
+                shell.clone(),
+                Self::login_shell_wrapper_args(&shell, agent_cmd),
+            )
+        })
+    }
+
+    /// The shell agents are wrapped in: the user's login shell, falling back
+    /// to the usual suspects. Always `None` off Unix.
+    fn wrapper_shell() -> Option<String> {
+        if !cfg!(unix) {
+            return None;
+        }
+        if let Ok(shell) = std::env::var("SHELL") {
+            if !shell.is_empty() {
+                return Some(shell);
+            }
+        }
+        ["/bin/bash", "/usr/bin/bash", "/bin/zsh"]
+            .into_iter()
+            .find(|p| std::path::Path::new(p).exists())
+            .map(str::to_string)
+    }
+
+    /// `<shell> <login flag> -i -c <agent_cmd>`: interactive so bash reads
+    /// .bashrc as well as .bash_profile, login so the profile files load too.
+    fn login_shell_wrapper_args(shell: &str, agent_cmd: &str) -> Vec<String> {
+        let mut args = Vec::new();
+        if let Some(flag) = Self::login_flag(shell) {
+            args.push(flag.to_string());
+        }
+        args.push("-i".to_string());
+        args.push("-c".to_string());
+        args.push(agent_cmd.to_string());
+        args
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         ctx: egui::Context,
@@ -142,13 +192,20 @@ impl Tab {
         };
         let mut shell = first.clone();
         // For agents the first candidate is the configured agent command and
-        // may include arguments; fallbacks are bare shell paths.
+        // may include arguments; fallbacks are bare shell paths. With
+        // login-shell mode on, the whole command is instead wrapped in the
+        // user's login shell so rc files (.bashrc et al.) are sourced.
         let mut agent_args: Vec<String> = Vec::new();
         if is_agent {
-            let parts: Vec<&str> = first.split_whitespace().collect();
-            if parts.len() > 1 {
-                shell = parts[0].to_string();
-                agent_args = parts[1..].iter().map(|s| s.to_string()).collect();
+            if let Some((wrapper, args)) = Self::login_shell_wrapper(run_as_login_shell, &first) {
+                shell = wrapper;
+                agent_args = args;
+            } else {
+                let parts: Vec<&str> = first.split_whitespace().collect();
+                if parts.len() > 1 {
+                    shell = parts[0].to_string();
+                    agent_args = parts[1..].iter().map(|s| s.to_string()).collect();
+                }
             }
         }
 
@@ -161,7 +218,10 @@ impl Tab {
             } else {
                 Vec::new()
             };
-            if run_as_login_shell && !is_agent {
+            // A wrapped agent command already carries its login flag in
+            // `agent_args`; everything else (plain terminals, agent fallback
+            // shells) appends it here.
+            if run_as_login_shell && !(is_agent && using_configured_command) {
                 if let Some(flag) = Self::login_flag(&shell) {
                     args.push(flag.to_string());
                 }
@@ -251,6 +311,39 @@ mod tests {
         assert_eq!(Tab::login_flag("fish"), Some("-l"));
         assert_eq!(Tab::login_flag("nu"), None);
         assert_eq!(Tab::login_flag("/usr/local/bin/nu"), None);
+    }
+
+    #[test]
+    fn login_shell_wrapper_args_bash() {
+        let args = Tab::login_shell_wrapper_args("/bin/bash", "claude --model x");
+        assert_eq!(args, ["--login", "-i", "-c", "claude --model x"]);
+    }
+
+    #[test]
+    fn login_shell_wrapper_args_fish() {
+        let args = Tab::login_shell_wrapper_args("fish", "opencode");
+        assert_eq!(args, ["-l", "-i", "-c", "opencode"]);
+    }
+
+    #[test]
+    fn login_shell_wrapper_args_shell_without_login_mode() {
+        let args = Tab::login_shell_wrapper_args("/usr/local/bin/nu", "opencode");
+        assert_eq!(args, ["-i", "-c", "opencode"]);
+    }
+
+    #[test]
+    fn login_shell_wrapper_disabled_returns_none() {
+        assert!(Tab::login_shell_wrapper(false, "claude").is_none());
+    }
+
+    #[test]
+    fn login_shell_wrapper_enabled_finds_shell_on_unix() {
+        if cfg!(unix) {
+            let (shell, args) = Tab::login_shell_wrapper(true, "claude").unwrap();
+            assert!(!shell.is_empty());
+            assert!(args.contains(&"-i".to_string()));
+            assert_eq!(args.last().map(String::as_str), Some("claude"));
+        }
     }
 
     #[test]

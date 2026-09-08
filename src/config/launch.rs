@@ -13,7 +13,8 @@ pub struct TerminalLaunchConfig {
     /// Up to `MAX_AGENTS` agent presets offered next to terminals.
     #[serde(default = "default_agents")]
     pub agents: [AgentConfig; MAX_AGENTS],
-    /// Whether plain terminal tabs run the shell as a login shell.
+    /// Whether plain terminal tabs run the shell as a login shell. Agents
+    /// have their own per-agent `wrap_login_shell` flag instead.
     #[serde(default = "default_run_as_login_shell")]
     pub run_as_login_shell: bool,
     /// Whether spare terminals/agents are pre-spawned per group for instant open.
@@ -97,6 +98,7 @@ mod tests {
             name: "Claude".into(),
             cmd: "claude".into(),
             enabled: true,
+            wrap_login_shell: true,
         };
 
         let mut settings = Settings::default();

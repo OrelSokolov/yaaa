@@ -13,6 +13,11 @@ pub struct AgentConfig {
     pub cmd: String,
     #[serde(default = "default_agent_enabled")]
     pub enabled: bool,
+    /// Launch the agent inside the user's login shell
+    /// (`$SHELL --login -i -c "<cmd>"`) so rc files (.bashrc et al.)
+    /// are sourced. Unix only; no-op on Windows.
+    #[serde(default)]
+    pub wrap_login_shell: bool,
 }
 
 fn default_agent_name() -> String {
@@ -46,6 +51,7 @@ impl AgentConfig {
             name,
             cmd,
             enabled: index == 0,
+            wrap_login_shell: false,
         }
     }
 }
@@ -346,5 +352,20 @@ mod tests {
         s.migrate_legacy_agent();
         let out = serde_json::to_string(&s).unwrap();
         assert!(!out.contains("default_agent_cmd"));
+    }
+
+    #[test]
+    fn agents_without_wrap_login_shell_field_default_to_false() {
+        // Settings written before the per-agent "Wrap with login shell"
+        // checkbox existed must deserialize with the flag off.
+        let json = r#"{"agents": [
+            {"name": "A", "cmd": "claude", "enabled": true},
+            {"name": "", "cmd": "", "enabled": false},
+            {"name": "", "cmd": "", "enabled": false},
+            {"name": "", "cmd": "", "enabled": false}
+        ]}"#;
+        let s: Settings = serde_json::from_str(json).unwrap();
+        assert!(!s.agents[0].wrap_login_shell);
+        assert!(s.agents.iter().skip(1).all(|a| !a.wrap_login_shell));
     }
 }

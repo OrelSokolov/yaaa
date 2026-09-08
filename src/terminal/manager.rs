@@ -165,13 +165,18 @@ impl TabManager {
                     tab_info.is_agent = use_agent;
                     tab_info.agent_index = agent_index;
 
+                    let agent_cfg = agent_index.and_then(|idx| manager.agents.get(idx));
                     let shell_cmd = if use_agent {
-                        agent_index
-                            .and_then(|idx| manager.agents.get(idx))
-                            .map(|a| a.cmd.clone())
-                            .unwrap_or_default()
+                        agent_cfg.map(|a| a.cmd.clone()).unwrap_or_default()
                     } else {
                         manager.default_shell_cmd.clone()
+                    };
+                    // Agents have their own login-shell flag; terminals use
+                    // the global one.
+                    let login_shell = if use_agent {
+                        agent_cfg.map(|a| a.wrap_login_shell).unwrap_or(false)
+                    } else {
+                        manager.run_as_login_shell
                     };
 
                     match Tab::new(
@@ -181,7 +186,7 @@ impl TabManager {
                         Some(group.path.clone()),
                         &shell_cmd,
                         use_agent,
-                        !use_agent && manager.run_as_login_shell,
+                        login_shell,
                         manager.terminal_layout_hint,
                         manager.cell_metrics_hint,
                     ) {
@@ -329,14 +334,18 @@ impl TabManager {
 
         let group_path = self.groups.get(&group_id).map(|g| g.path.clone());
 
-        let (use_agent, shell_cmd) = if let Some(idx) = agent_index {
-            self.agents
-                .get(idx)
-                .filter(|a| a.enabled && !a.cmd.trim().is_empty())
-                .map(|a| (true, a.cmd.clone()))
-                .unwrap_or((false, self.default_shell_cmd.clone()))
+        let agent_cfg = agent_index
+            .and_then(|idx| self.agents.get(idx))
+            .filter(|a| a.enabled && !a.cmd.trim().is_empty());
+        let use_agent = agent_cfg.is_some();
+        let shell_cmd = agent_cfg
+            .map(|a| a.cmd.clone())
+            .unwrap_or_else(|| self.default_shell_cmd.clone());
+        // Agents have their own login-shell flag; terminals use the global one.
+        let login_shell = if use_agent {
+            agent_cfg.map(|a| a.wrap_login_shell).unwrap_or(false)
         } else {
-            (false, self.default_shell_cmd.clone())
+            self.run_as_login_shell
         };
 
         let tab = match Tab::new(
@@ -346,7 +355,7 @@ impl TabManager {
             group_path,
             &shell_cmd,
             use_agent,
-            !use_agent && self.run_as_login_shell,
+            login_shell,
             self.terminal_layout_hint,
             self.cell_metrics_hint,
         ) {
@@ -586,12 +595,14 @@ impl TabManager {
             None => return,
         };
 
-        let (use_agent, shell_cmd) = match agent_index {
+        let (use_agent, shell_cmd, login_shell) = match agent_index {
             Some(idx) => match self.agents.get(idx) {
-                Some(a) if a.enabled && !a.cmd.trim().is_empty() => (true, a.cmd.clone()),
+                Some(a) if a.enabled && !a.cmd.trim().is_empty() => {
+                    (true, a.cmd.clone(), a.wrap_login_shell)
+                }
                 _ => return,
             },
-            None => (false, self.default_shell_cmd.clone()),
+            None => (false, self.default_shell_cmd.clone(), self.run_as_login_shell),
         };
 
         let tab_id = self.next_tab_id;
@@ -604,7 +615,7 @@ impl TabManager {
             Some(group_path),
             &shell_cmd,
             use_agent,
-            !use_agent && self.run_as_login_shell,
+            login_shell,
             self.terminal_layout_hint,
             self.cell_metrics_hint,
         ) {

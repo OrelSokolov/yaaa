@@ -90,7 +90,7 @@ Works on macOS, Linux, and Windows with one-click install.
 ### Shell Support
 - Auto-detected shell chain ($SHELL → zsh → bash)
 - Configurable default shell command
-- Login shell mode (`--login` flag)
+- Login shell mode (`--login` flag); agents have a separate per-agent "Wrap with login shell" option (`$SHELL --login -i -c "<cmd>"` so .bashrc is sourced — Unix only, no-op on Windows)
 - Shell fallback mechanism (tries multiple shells if one fails)
 - Cross-platform (zsh/bash on Unix, cmd/powershell on Windows)
 
