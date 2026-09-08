@@ -6,6 +6,10 @@ impl super::WindowManager {
         let mut cancel = false;
 
         let window_id = egui::Id::new("agents_settings_window");
+        // The dialog spans 60% of the screen width. Both min and max are pinned
+        // because egui persists per-window sizes (eframe "persistence"): a lone
+        // max_width only caps the remembered size, it never widens the window.
+        let dialog_width = ctx.content_rect().width() * 0.6;
 
         if self.show_agents_settings && !self.was_agents_settings_open {
             ctx.memory_mut(|m| m.request_focus(window_id));
@@ -15,6 +19,8 @@ impl super::WindowManager {
         egui::Window::new("Agents")
             .id(window_id)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .min_width(dialog_width)
+            .max_width(dialog_width)
             .open(&mut self.show_agents_settings)
             .show(ctx, |ui| {
                 egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
@@ -42,11 +48,17 @@ impl super::WindowManager {
 
                                         ui.horizontal(|ui| {
                                             ui.label("Name:");
-                                            ui.text_edit_singleline(&mut agent.name);
+                                            ui.add(
+                                                egui::TextEdit::singleline(&mut agent.name)
+                                                    .desired_width(f32::INFINITY),
+                                            );
                                         });
                                         ui.horizontal(|ui| {
                                             ui.label("Command:");
-                                            ui.text_edit_singleline(&mut agent.cmd);
+                                            ui.add(
+                                                egui::TextEdit::singleline(&mut agent.cmd)
+                                                    .desired_width(f32::INFINITY),
+                                            );
                                         });
                                     });
                                 });
