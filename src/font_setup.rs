@@ -1,10 +1,9 @@
 //! Font setup with universal embedded fallback + optional fontconfig support
 //!
-//! Three fonts are embedded in the binary from `assets/fonts/`:
-//! - `InterVariable` — the primary UI (proportional) font;
-//! - `Ubuntu-Light` — universal outline fallback (Cyrillic etc.) in both
-//!   families on every platform, so glyph coverage never depends on system
-//!   fonts;
+//! Two fonts are embedded in the binary from `assets/fonts/`:
+//! - `Ubuntu-Light` — the primary UI (proportional) font and universal
+//!   outline fallback (Cyrillic etc.) in both families on every platform,
+//!   so glyph coverage never depends on system fonts;
 //! - `NotoEmoji-Regular` — full monochrome emoji coverage, pinned by this
 //!   repository instead of depending on the egui version. (Color emoji
 //!   fonts such as NotoColorEmoji are CBDT bitmaps, which epaint/ab_glyph
@@ -17,7 +16,7 @@
 //! ~3 seconds on macOS while finding no useful fonts (fontconfig is not the
 //! native macOS font stack).
 
-use egui::{FontData, FontDefinitions, FontFamily};
+use egui::{FontData, FontDefinitions, FontFamily, FontTweak};
 #[cfg(not(target_os = "macos"))]
 use std::collections::HashSet;
 use std::sync::{Arc, OnceLock};
@@ -29,13 +28,6 @@ const UBUNTU_LIGHT_TTF: &[u8] = include_bytes!("../assets/fonts/Ubuntu-Light.ttf
 
 /// Name under which the embedded Ubuntu Light is registered in egui.
 const EMBEDDED_FONT_NAME: &str = "Ubuntu-Light";
-
-/// Inter Variable shipped in this repository (SIL OFL 1.1, see
-/// `assets/fonts/OFL-Inter.txt`). The primary UI font.
-const INTER_VARIABLE_TTF: &[u8] = include_bytes!("../assets/fonts/InterVariable.ttf");
-
-/// Name under which the embedded Inter is registered in egui.
-const INTER_FONT_NAME: &str = "InterVariable";
 
 /// Noto Emoji shipped in this repository (SIL OFL 1.1, see
 /// `assets/fonts/OFL-NotoEmoji.txt`). Registered under the same key as
@@ -56,19 +48,6 @@ pub fn apply_font_definitions(
 ) {
     let mut fonts = FontDefinitions::default();
 
-    // Primary UI font: Inter goes first in the proportional family (the
-    // first family entry defines the look).
-    fonts.font_data.insert(
-        INTER_FONT_NAME.to_owned(),
-        Arc::new(FontData::from_static(INTER_VARIABLE_TTF)),
-    );
-    {
-        let list = fonts.families.entry(FontFamily::Proportional).or_default();
-        if !list.iter().any(|name| name == INTER_FONT_NAME) {
-            list.insert(0, INTER_FONT_NAME.to_owned());
-        }
-    }
-
     // Universal embedded fallback: same glyph coverage on every platform.
     // This replaces egui's bundled copy (same face, but now pinned by this
     // repository instead of depending on the egui version).
@@ -86,9 +65,16 @@ pub fn apply_font_definitions(
 
     // Full emoji coverage pinned by this repository. egui's defaults already
     // list this name in both families, so replacing the data entry is enough.
+    // Keep egui's tweak (scale 0.81): without it the emoji glyphs (✖ and
+    // friends) render visibly bigger than the bundled face they replace.
     fonts.font_data.insert(
         NOTO_EMOJI_FONT_NAME.to_owned(),
-        Arc::new(FontData::from_static(NOTO_EMOJI_TTF)),
+        Arc::new(
+            FontData::from_static(NOTO_EMOJI_TTF).tweak(FontTweak {
+                scale: 0.81, // Make smaller — same as egui's default
+                ..Default::default()
+            }),
+        ),
     );
     for family in [FontFamily::Monospace, FontFamily::Proportional] {
         let list = fonts.families.entry(family).or_default();

@@ -169,7 +169,7 @@ pub struct AppFonts {
     #[serde(default = "default_terminal_font_size")]
     pub terminal_font_size: f32,
     /// System font face used for the UI (proportional family). `None` means
-    /// the embedded default (Inter).
+    /// the embedded default.
     #[serde(default)]
     pub ui_font_name: Option<String>,
     /// System font face used for the terminal (monospace family). `None`
