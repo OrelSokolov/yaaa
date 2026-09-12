@@ -11,10 +11,11 @@
 //!   that actually renders.)
 //!
 //! On Linux we additionally query fontconfig for extra fallback fonts (Noto,
-//! DejaVu, emoji, ...). On macOS we skip fontconfig entirely: the crate
-//! `rust-fontconfig` builds its cache by scanning system fonts and takes
-//! ~3 seconds on macOS while finding no useful fonts (fontconfig is not the
-//! native macOS font stack).
+//! DejaVu, emoji, ...), plus a CJK-capable font picked by glyph coverage so
+//! Chinese/Japanese/Korean text renders instead of tofu boxes. On macOS we
+//! skip fontconfig entirely: the crate `rust-fontconfig` builds its cache by
+//! scanning system fonts and takes ~3 seconds on macOS while finding no
+//! useful fonts (fontconfig is not the native macOS font stack).
 
 use egui::{FontData, FontDefinitions, FontFamily, FontTweak};
 #[cfg(not(target_os = "macos"))]
@@ -255,18 +256,24 @@ fn get_fallback_fonts(cache: &rust_fontconfig::FcFontCache) -> Vec<String> {
     }
 
     // Priority fallback fonts (for special characters)
-    let priority_fallback = vec![
+    let mut result = vec![
         "Noto Color Emoji",   // Emoji
         "Noto Sans Symbols",  // Mathematical symbols
         "Noto Sans Symbols2", // Additional symbols
         "DejaVu Sans",        // Fallback
-    ];
+    ]
+    .into_iter()
+    .map(|s| s.to_string())
+    .collect::<Vec<_>>();
 
-    // Add priority fonts at the front
-    let mut result = priority_fallback
-        .iter()
-        .map(|s| s.to_string())
-        .collect::<Vec<_>>();
+    // CJK fallback picked by glyph coverage. The monospace scan above never
+    // finds these: CJK faces are dual-width, so their `post` table reports
+    // isFixedPitch=0 and rust-fontconfig marks them non-monospace — even the
+    // ones named "Noto Sans Mono CJK". Without this, CJK text renders as
+    // tofu boxes (□).
+    if let Some(cjk) = cjk_fallback_font(cache) {
+        result.push(cjk);
+    }
 
     // Add the rest found by fontconfig
     for font in fonts {
@@ -276,9 +283,51 @@ fn get_fallback_fonts(cache: &rust_fontconfig::FcFontCache) -> Vec<String> {
     }
 
     // Limit the number of fallback fonts
-    result.truncate(6);
+    result.truncate(7);
 
     result
+}
+
+/// Pick the best CJK-capable fallback font by glyph coverage, preferring a
+/// monospaced Simplified Chinese face (terminal cells stay double-width and
+/// hanzi get SC glyph variants). Coverage is checked against the OS/2
+/// unicode ranges cached by rust-fontconfig: U+4E00 (一) is present in every
+/// CJK font. Returns `None` when no installed font covers CJK.
+#[cfg(not(target_os = "macos"))]
+fn cjk_fallback_font(cache: &rust_fontconfig::FcFontCache) -> Option<String> {
+    const CJK_IDEOGRAPH: char = '\u{4E00}'; // 一
+
+    cache
+        .list()
+        .iter()
+        .filter(|(pattern, _)| {
+            pattern
+                .unicode_ranges
+                .iter()
+                .any(|range| range.contains(CJK_IDEOGRAPH))
+        })
+        .filter_map(|(pattern, _)| pattern.name.clone())
+        .max_by_key(|name| cjk_fallback_score(name))
+}
+
+/// Preference score for a CJK fallback face: mono > SC variants > plain CJK,
+/// Regular over Bold.
+#[cfg(not(target_os = "macos"))]
+fn cjk_fallback_score(name: &str) -> i32 {
+    let mut score = 0;
+    if name.contains("Mono") {
+        score += 4; // Fixed advance for CJK cells in the terminal grid
+    }
+    if name.contains("SC") {
+        score += 2; // Simplified Chinese glyph variants
+    }
+    if name.contains("CJK") {
+        score += 1;
+    }
+    if name.contains("Bold") {
+        score -= 1; // Prefer the Regular face of the same family
+    }
+    score
 }
 
 /// Try to load a system font by name
@@ -297,8 +346,17 @@ fn load_system_font(cache: &rust_fontconfig::FcFontCache, name: &str) -> Option<
     match font_source {
         rust_fontconfig::FontSource::Disk(font_path) => std::fs::read(&font_path.path)
             .ok()
-            .map(FontData::from_owned),
-        rust_fontconfig::FontSource::Memory(font) => Some(FontData::from_owned(font.bytes.clone())),
+            // fontconfig resolved a specific face of the file (e.g. "Noto Sans
+            // Mono CJK SC" is one face of the 10-face NotoSansCJK .ttc);
+            // without the index egui would always load face 0.
+            .map(|bytes| FontData {
+                index: font_path.font_index as u32,
+                ..FontData::from_owned(bytes)
+            }),
+        rust_fontconfig::FontSource::Memory(font) => Some(FontData {
+            index: font.font_index as u32,
+            ..FontData::from_owned(font.bytes.clone())
+        }),
     }
 }
 
@@ -334,6 +392,30 @@ mod tests {
         assert!(emoji_ui, "emoji missing in the UI font");
         assert!(cyrillic_mono, "Cyrillic missing in the monospace fallback");
         assert!(emoji_mono, "emoji missing in the monospace fallback");
+    }
+
+    /// CJK text must render, not turn into tofu boxes. The fallback is picked
+    /// by glyph coverage via fontconfig (see `cjk_fallback_font`); skipped on
+    /// systems without any CJK-capable font (e.g. a minimal CI container).
+    #[test]
+    fn cjk_fallback_provides_glyphs() {
+        #[cfg(not(target_os = "macos"))]
+        {
+            if cjk_fallback_font(font_cache()).is_none() {
+                return; // No CJK fonts installed — nothing to fall back to.
+            }
+        }
+        let ctx = egui::Context::default();
+        apply_font_definitions(&ctx, None, None);
+        ctx.begin_pass(egui::RawInput::default());
+        let mono = egui::FontId::monospace(14.0);
+        let ui = egui::FontId::proportional(14.0);
+        let cjk_mono = ctx.fonts_mut(|f| f.has_glyphs(&mono, "在提交中文"));
+        let cjk_ui = ctx.fonts_mut(|f| f.has_glyphs(&ui, "在提交中文"));
+        let _ = ctx.end_pass();
+
+        assert!(cjk_mono, "CJK missing in the monospace fallback");
+        assert!(cjk_ui, "CJK missing in the proportional fallback");
     }
 
     /// Selecting a system font must put it at the front of the target family
