@@ -1,6 +1,6 @@
 //! Font setup with universal embedded fallback + optional fontconfig support
 //!
-//! Two fonts are embedded in the binary from `assets/fonts/`:
+//! Three fonts are embedded in the binary from `assets/fonts/`:
 //! - `Ubuntu-Light` — the primary UI (proportional) font and universal
 //!   outline fallback (Cyrillic etc.) in both families on every platform,
 //!   so glyph coverage never depends on system fonts;
@@ -9,13 +9,21 @@
 //!   fonts such as NotoColorEmoji are CBDT bitmaps, which epaint/ab_glyph
 //!   cannot rasterize — monochrome NotoEmoji is the fullest emoji coverage
 //!   that actually renders.)
+//! - `NotoSansMonoCJKsc-Regular` — pan-CJK monospace fallback (subset:
+//!   GB2312 + JIS X 0208 hanzi, full hangul, kana, punctuation, fullwidth
+//!   forms; ~7 MB instead of the 16 MB full face) so Chinese/Japanese/
+//!   Korean text renders instead of tofu boxes on every platform, including
+//!   Windows and macOS where system CJK fonts are split per language (a
+//!   Chinese face covers no hangul) and would be a fontconfig lottery.
+//!   Monospaced, so a CJK glyph is exactly two terminal cells wide and
+//!   grid borders line up.
 //!
 //! On Linux we additionally query fontconfig for extra fallback fonts (Noto,
-//! DejaVu, emoji, ...), plus a CJK-capable font picked by glyph coverage so
-//! Chinese/Japanese/Korean text renders instead of tofu boxes. On macOS we
-//! skip fontconfig entirely: the crate `rust-fontconfig` builds its cache by
-//! scanning system fonts and takes ~3 seconds on macOS while finding no
-//! useful fonts (fontconfig is not the native macOS font stack).
+//! DejaVu, emoji, ...), plus a CJK-capable font picked by glyph coverage as
+//! a secondary fallback. On macOS we skip fontconfig entirely: the crate
+//! `rust-fontconfig` builds its cache by scanning system fonts and takes
+//! ~3 seconds on macOS while finding no useful fonts (fontconfig is not the
+//! native macOS font stack).
 
 use egui::{FontData, FontDefinitions, FontFamily, FontTweak};
 #[cfg(not(target_os = "macos"))]
@@ -38,6 +46,21 @@ const NOTO_EMOJI_TTF: &[u8] = include_bytes!("../assets/fonts/NotoEmoji-Regular.
 
 /// Name under which the embedded Noto Emoji is registered in egui.
 const NOTO_EMOJI_FONT_NAME: &str = "NotoEmoji-Regular";
+
+/// Noto Sans Mono CJK SC shipped in this repository (SIL OFL 1.1, see
+/// `assets/fonts/OFL-NotoSansCJK.txt`) and subset to the scripts a terminal
+/// actually renders: GB2312 + JIS X 0208 hanzi/kana, all 11 172 hangul
+/// syllables, CJK punctuation and fullwidth forms (16 MB -> ~7 MB). Hanzi
+/// outside the two national standards (rare/archaic) is left to the system
+/// fontconfig fallback. Monospaced and pan-CJK, so CJK glyphs render
+/// instead of tofu boxes and keep exactly two terminal cells on every
+/// platform — Windows system CJK fonts are split per language and none
+/// covers Chinese, Japanese and Korean at once.
+const NOTO_SANS_MONO_CJK_SC_OTF: &[u8] =
+    include_bytes!("../assets/fonts/NotoSansMonoCJKsc-Regular.otf");
+
+/// Name under which the embedded Noto Sans Mono CJK SC is registered in egui.
+const NOTO_SANS_MONO_CJK_FONT_NAME: &str = "NotoSansMonoCJKsc-Regular";
 
 /// Initialize fonts: embedded universal fallback everywhere, plus system
 /// fallback via fontconfig on platforms where it is useful. Selected system
@@ -81,6 +104,20 @@ pub fn apply_font_definitions(
         let list = fonts.families.entry(family).or_default();
         if !list.iter().any(|name| name == NOTO_EMOJI_FONT_NAME) {
             list.push(NOTO_EMOJI_FONT_NAME.to_owned());
+        }
+    }
+
+    // Universal CJK fallback: hanzi, kana and hangul in one embedded face,
+    // same glyphs on every platform. Appended before any system fontconfig
+    // fallbacks so it wins for CJK codepoints.
+    fonts.font_data.insert(
+        NOTO_SANS_MONO_CJK_FONT_NAME.to_owned(),
+        Arc::new(FontData::from_static(NOTO_SANS_MONO_CJK_SC_OTF)),
+    );
+    for family in [FontFamily::Monospace, FontFamily::Proportional] {
+        let list = fonts.families.entry(family).or_default();
+        if !list.iter().any(|name| name == NOTO_SANS_MONO_CJK_FONT_NAME) {
+            list.push(NOTO_SANS_MONO_CJK_FONT_NAME.to_owned());
         }
     }
 
@@ -266,11 +303,12 @@ fn get_fallback_fonts(cache: &rust_fontconfig::FcFontCache) -> Vec<String> {
     .map(|s| s.to_string())
     .collect::<Vec<_>>();
 
-    // CJK fallback picked by glyph coverage. The monospace scan above never
-    // finds these: CJK faces are dual-width, so their `post` table reports
-    // isFixedPitch=0 and rust-fontconfig marks them non-monospace — even the
-    // ones named "Noto Sans Mono CJK". Without this, CJK text renders as
-    // tofu boxes (□).
+    // CJK system fallback picked by glyph coverage — secondary to the
+    // embedded pan-CJK face, only used when the embedded font misses a
+    // glyph. The monospace scan above never finds these: CJK faces are
+    // dual-width, so their `post` table reports isFixedPitch=0 and
+    // rust-fontconfig marks them non-monospace — even the ones named
+    // "Noto Sans Mono CJK".
     if let Some(cjk) = cjk_fallback_font(cache) {
         result.push(cjk);
     }
@@ -394,24 +432,38 @@ mod tests {
         assert!(emoji_mono, "emoji missing in the monospace fallback");
     }
 
-    /// CJK text must render, not turn into tofu boxes. The fallback is picked
-    /// by glyph coverage via fontconfig (see `cjk_fallback_font`); skipped on
-    /// systems without any CJK-capable font (e.g. a minimal CI container).
+    /// CJK text must render, not turn into tofu boxes. The pan-CJK face is
+    /// embedded (see `NOTO_SANS_MONO_CJK_FONT_NAME`), so coverage holds on
+    /// every platform — including Windows, where system CJK fonts are split
+    /// per language and no single face covers Chinese, Japanese and Korean.
     #[test]
     fn cjk_fallback_provides_glyphs() {
-        #[cfg(not(target_os = "macos"))]
-        {
-            if cjk_fallback_font(font_cache()).is_none() {
-                return; // No CJK fonts installed — nothing to fall back to.
-            }
-        }
         let ctx = egui::Context::default();
         apply_font_definitions(&ctx, None, None);
         ctx.begin_pass(egui::RawInput::default());
         let mono = egui::FontId::monospace(14.0);
         let ui = egui::FontId::proportional(14.0);
-        let cjk_mono = ctx.fonts_mut(|f| f.has_glyphs(&mono, "在提交中文"));
-        let cjk_ui = ctx.fonts_mut(|f| f.has_glyphs(&ui, "在提交中文"));
+        let hanzi = "在提交中文";
+        let hangul = "안녕하세요";
+        let kana = "こんにちは";
+        let cjk_mono = ctx.fonts_mut(|f| {
+            f.has_glyphs(&mono, hanzi)
+                && f.has_glyphs(&mono, hangul)
+                && f.has_glyphs(&mono, kana)
+        });
+        let cjk_ui = ctx.fonts_mut(|f| {
+            f.has_glyphs(&ui, hanzi)
+                && f.has_glyphs(&ui, hangul)
+                && f.has_glyphs(&ui, kana)
+        });
+        // Rasterize once so a broken font face would panic here, not in prod.
+        let _galley = ctx.fonts_mut(|f| {
+            f.layout_no_wrap(
+                "在提交中文 안녕하세요 こんにちは".to_string(),
+                mono.clone(),
+                egui::Color32::WHITE,
+            )
+        });
         let _ = ctx.end_pass();
 
         assert!(cjk_mono, "CJK missing in the monospace fallback");

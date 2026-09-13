@@ -1,13 +1,13 @@
 ════════════════════════════════════════════════════════════════
  H2Term font coverage test
- Проверка шрифтового покрытия: cat fonts_test.txt в h2term
-════════────────────────────────────────────────────────────────
+ Run `cat fonts_test.txt` in h2term to check font coverage
+════════════════════════════════════════════════════════════════
 
 [1] Basic Latin / ASCII
   ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz
   0123456789 !@#$%^&*()_+-=[]{}|;:'",.<>/? `~\
 
-[2] Cyrillic / Кириллица
+[2] Cyrillic
   АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ абвгдеёжзийклмнопрстуфхцчшщъыьэюя
   Съешь же ещё этих мягких французских булок, да выпей чаю
 
@@ -18,28 +18,28 @@
   ÀÁÂÃÄÅÆ ÇÈÉÊË ÌÍÎÏ Ñ ÒÓÔÕÖ Ø ÙÚÛÜ Ý ß Œ Þ
   àáâãäåæ çèéêë ìíîï ñ òóôõö ø ùúûü ý ÿ œ þ
 
-[5] Simplified Chinese / Упрощённый китайский (тофу-кейс из сессии)
+[5] Simplified Chinese (the tofu case from the session)
   CI 在提交 708d679 上失败了。先看提交内容和 CI 配置，再查流水线日志。
   你好，世界！人工智能终端。语音识别与转录。
   一二三上下了不中人大有是我出进说时要
 
-[6] Traditional Chinese / Традиционный китайский
+[6] Traditional Chinese
   你好，世界！語音識別與終端機。繁體中文測試。
 
-[7] Japanese / Японский
+[7] Japanese
   こんにちは世界。ひらがな カタカナ 漢字混合。
   日本語のテスト：ターミナル、フォント、グリフ。
 
-[8] Korean / Корейский
+[8] Korean
   안녕하세요, 세계! 한글 테스트: 터미널, 글꼴, 문자.
 
-[9] Fullwidth forms / Полноширинные формы
+[9] Fullwidth forms
   ＡＢＣ ａｂｃ １２３ ！？ ＃＄ （全角）
 
-[10] CJK punctuation / CJK-пунктуация
+[10] CJK punctuation
   「你好」『世界』【终端】《测试》——…… 、。，；：！？
 
-[11] Box drawing / Псевдографика
+[11] Box drawing
   ┌────────┬────────┐
   │ cell 1 │ cell 2 │
   ├────────┼────────┤
@@ -65,16 +65,16 @@
 [17] Emoji (monochrome NotoEmoji)
   📂 🤖 🔀 🖥 ⌨ 🔍 ✓ ✖ ⚠ ⚡ ✅ ❌ ⭐ ☕ ❤ ☂ ☎
 
-[18] Combining diacritics / Диакритика (base + combining mark = один кластер)
+[18] Combining diacritics (base + combining mark = one cluster)
   é ä ö ũ ñ Å Ÿ ỹ  (base + U+030x, combining)
 
-[19] Width sanity / Проверка ширины (правые границы должны совпасть)
-  |1234567890|            <- 10 узких = 10 колонок
-  |你好你好你好|            <- 5 иероглифов x 2 = 10 колонок
-  |ａｂｃｄｅ|              <- 5 fullwidth x 2 = 10 колонок
+[19] Width sanity (right borders must align)
+  |1234567890|            <- 10 narrow = 10 columns
+  |一二三四五|            <- 5 hanzi x 2 = 10 columns
+  |ａｂｃｄｅ|              <- 5 fullwidth x 2 = 10 columns
 
-[20] Mixed inline / Смешанная строка
+[20] Mixed inline
   Latin Кириллица 汉字 ひらがな 한글 Ελληνικά → ✓ ✅ 📂 EOF
 
-Если вместо иероглифов квадраты (□) — CJK-фолбэк не работает:
-см. src/font_setup.rs, тест font_setup::tests::cjk_fallback_provides_glyphs.
+If hanzi render as boxes (□), the CJK fallback is broken:
+see src/font_setup.rs, test font_setup::tests::cjk_fallback_provides_glyphs.
