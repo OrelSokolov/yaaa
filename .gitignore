@@ -2,3 +2,5 @@
 *.swp
 target/
 *.sh
+builds/
+crosspacks/

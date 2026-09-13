@@ -1,0 +1,116 @@
+# crosspack pipeline config — https://github.com/OrelSokolov/crosspack
+# Stages: crosspack deps <target> -> crosspack build <target> -> crosspack pack <target>
+name: h2term
+version: 0.6.6   # keep in sync with version in Cargo.toml
+
+build:
+  deps:
+    rust:
+      hosts:
+        # verify-only: rustup is the sane installer, cargo must already be on PATH
+        "*":
+          verify: cargo --version
+    mingw-w64:
+      hosts:
+        ubuntu:
+          verify: x86_64-w64-mingw32-gcc --version
+          install: sudo apt-get install -y mingw-w64
+        debian:
+          verify: x86_64-w64-mingw32-gcc --version
+          install: sudo apt-get install -y mingw-w64
+        fedora:
+          verify: x86_64-w64-mingw32-gcc --version
+          install: sudo dnf install -y mingw64-gcc
+        arch:
+          verify: x86_64-w64-mingw32-gcc --version
+          install: sudo pacman -S --needed mingw-w64-gcc
+        darwin:
+          verify: x86_64-w64-mingw32-gcc --version
+          install: brew install mingw-w64
+
+  matrix:
+    # Linux: one release binary fanned out to every deb/PKGBUILD target
+    - id: linux
+      build: linux/amd64
+      steps:
+        - cargo build --release --locked
+      artifacts:
+        from: target/release
+        include: [h2term]
+        to: [ubuntu-25.10, ubuntu-26.10, ubuntu-24.04, ubuntu-22.04, debian-12, debian-13, arch]
+
+    # Windows: cross-compiled .exe — the entry builds on the Linux host
+    # (cargo + mingw-w64) and fans out to the windows target
+    - id: windows
+      build: linux/amd64
+      steps:
+        - rustup target add x86_64-pc-windows-gnu
+        - cargo build --release --target x86_64-pc-windows-gnu --locked
+      artifacts:
+        from: target/x86_64-pc-windows-gnu/release
+        include: [h2term.exe]
+        to: [windows-11.0]
+
+    # macOS: universal binary via the existing rake task (runs on a Mac only);
+    # the copy aligns the artifact name with package.payload below
+    - id: macos
+      build: darwin/any
+      steps:
+        - rake build:macos_binary
+        - cp target/release/h2term-macos target/release/h2term
+      artifacts:
+        from: target/release
+        include: [h2term]
+        to: [macos]
+
+package:
+  maintainer: Oleg Orlov <orelcokolov@gmail.com>
+  description: |-
+    Multi-Agent Terminal - H2Term byOrlov -
+    Terminal application with AI agent support.
+  license: MIT
+  section: utils
+  sources: builds
+  prefix: usr
+  lib_dir: lib/h2term
+  # Mapping form: common key -> per-target file name (crosspack >= 0.6.0);
+  # windows resolves to the cross-compiled .exe, everything else to h2term
+  payload:
+    h2term:
+      "*": h2term
+      windows-11.0: h2term.exe
+  executables: [h2term]
+  links:
+    bin/h2term: ../lib/h2term/h2term
+  desktop:
+    name: H2Term byOrlov
+    comment: Multi-Agent Terminal
+    categories: TerminalEmulator;System;
+  icon: assets/logo.png
+
+deps:
+  version: 1
+  libxkbcommon:
+    targets:
+      debian:
+        "*": [libxkbcommon0]
+      ubuntu:
+        "*": [libxkbcommon0]
+      fedora:
+        "*": [libxkbcommon]
+      arch:
+        "*": [libxkbcommon]
+      macos: system
+      windows: system
+  libgl1:
+    targets:
+      debian:
+        "*": [libgl1]
+      ubuntu:
+        "*": [libgl1]
+      fedora:
+        "*": [mesa-libGL]
+      arch:
+        "*": [mesa]
+      macos: system
+      windows: system
