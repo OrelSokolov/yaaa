@@ -98,11 +98,13 @@ pub fn show_menu_bar(ui: &mut egui::Ui, view: MenuBarView<'_>) -> MenuActions {
 
                             ui.separator();
 
-                            let recent_projects: Vec<&RecentProject> = view
+                            let mut recent_projects: Vec<&RecentProject> = view
                                 .recent_projects
                                 .iter()
                                 .filter(|p| !view.open_paths.contains(&p.path))
                                 .collect();
+                            recent_projects
+                                .sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
 
                             if !recent_projects.is_empty() {
                                 for project in recent_projects {
