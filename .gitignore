@@ -3,4 +3,5 @@
 target/
 *.sh
 builds/
+build/
 crosspacks/
