@@ -31,6 +31,9 @@ pub struct App {
     cached_terminal_font: egui_term::TerminalFont,
     git_cache: GitStatusCache,
     enable_git_status: bool,
+    /// Per-tab memory limit in MB; a tab whose process tree exceeds it is
+    /// killed as a memory leak. `0` disables the check.
+    tab_memory_limit_mb: u64,
     /// Persisted preference: show the welcome window on every startup.
     show_welcome: bool,
     /// Single source of truth for how new terminals are spawned. `Settings`
@@ -112,6 +115,7 @@ impl App {
             cached_terminal_font,
             git_cache,
             enable_git_status: settings.enable_git_status,
+            tab_memory_limit_mb: settings.tab_memory_limit_mb,
             show_welcome: settings.show_welcome,
             launch_config,
             system_monitor: SystemMonitor::new(),
@@ -150,6 +154,7 @@ impl App {
             legacy_default_agent_cmd: None,
             theme: self.theme.clone(),
             enable_git_status: self.enable_git_status,
+            tab_memory_limit_mb: self.tab_memory_limit_mb,
             show_welcome: self.show_welcome,
             last_terminal_layout: self.layout_tracker.last_layout(),
             last_terminal_cell_metrics: self.layout_tracker.last_cell_metrics(),
@@ -334,8 +339,11 @@ impl App {
             self.window_manager.show_font_settings = true;
         }
         if actions.show_terminal_settings {
-            self.window_manager
-                .begin_settings_edit(&self.launch_config, self.enable_git_status);
+            self.window_manager.begin_settings_edit(
+                &self.launch_config,
+                self.enable_git_status,
+                self.tab_memory_limit_mb,
+            );
             self.window_manager.show_settings = true;
         }
         if actions.show_agents_settings {
@@ -507,6 +515,10 @@ impl App {
             config_changed = true;
         }
 
+        if let Some(tab_memory_limit_mb) = actions.tab_memory_limit_mb {
+            self.tab_memory_limit_mb = tab_memory_limit_mb;
+        }
+
         if config_changed {
             self.tab_manager
                 .update_launch_config(&self.launch_config, &self.egui_ctx);
@@ -604,15 +616,41 @@ impl eframe::App for App {
         // is cheap after the first call). Both values are copied out so there
         // is no lingering borrow of `system_monitor` inside the UI closures.
         let mem_percent = self.system_monitor.memory().percent;
-        let total_tabs_kb: u64 = {
+        let per_tab_memory_kb: Vec<(u64, u64)> = {
             let tm = &self.tab_manager;
             let sm = &mut self.system_monitor;
             tm.iter_groups()
                 .flat_map(|g| g.tabs.iter())
-                .filter_map(|t| tm.get_tab(t.id))
-                .map(|tab| sm.process_tree_memory_kb(tab.backend.pty_id()))
-                .sum()
+                .filter_map(|t| tm.get_tab(t.id).map(|tab| (t.id, tab.backend.pty_id())))
+                .map(|(id, pid)| (id, sm.process_tree_memory_kb(pid)))
+                .collect()
         };
+        let total_tabs_kb: u64 = per_tab_memory_kb.iter().map(|&(_, kb)| kb).sum();
+
+        // Enforce the per-tab memory limit: a tab whose process tree exceeded
+        // it is killed (dropping the backend SIGKILLs the whole process group)
+        // and a notice modal is shown. `0` disables the check.
+        if self.tab_memory_limit_mb > 0 {
+            let limit_kb = self.tab_memory_limit_mb * 1024;
+            for (tab_id, tab_kb) in per_tab_memory_kb {
+                if tab_kb > limit_kb {
+                    let title = self
+                        .tab_manager
+                        .get_tab(tab_id)
+                        .map(|t| t.title.clone())
+                        .unwrap_or_default();
+                    log::warn!(
+                        "Tab {} '{}' exceeded memory limit {} MB ({}), killing",
+                        tab_id,
+                        title,
+                        self.tab_memory_limit_mb,
+                        crate::system_monitor::format_kb(tab_kb)
+                    );
+                    self.tab_manager.remove(tab_id);
+                    self.window_manager.tab_killed(self.tab_memory_limit_mb);
+                }
+            }
+        }
 
         let open_paths: std::collections::HashSet<_> = self
             .tab_manager

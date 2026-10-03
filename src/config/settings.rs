@@ -93,6 +93,10 @@ pub struct Settings {
     pub enable_git_status: bool,
     #[serde(default = "default_preload_tabs")]
     pub preload_tabs: bool,
+    /// Per-tab memory limit in MB. A tab whose process tree exceeds it is
+    /// killed as a memory leak. `0` disables the limit.
+    #[serde(default = "default_tab_memory_limit_mb")]
+    pub tab_memory_limit_mb: u64,
     /// Show the welcome/features overview window on startup.
     #[serde(default = "default_show_welcome")]
     pub show_welcome: bool,
@@ -148,6 +152,10 @@ fn default_preload_tabs() -> bool {
     DEFAULT_PRELOAD_TABS
 }
 
+fn default_tab_memory_limit_mb() -> u64 {
+    DEFAULT_TAB_MEMORY_LIMIT_MB
+}
+
 fn default_show_welcome() -> bool {
     DEFAULT_SHOW_WELCOME
 }
@@ -171,6 +179,7 @@ impl Default for Settings {
             theme: AppTheme::default(),
             enable_git_status: default_enable_git_status(),
             preload_tabs: DEFAULT_PRELOAD_TABS,
+            tab_memory_limit_mb: DEFAULT_TAB_MEMORY_LIMIT_MB,
             show_welcome: DEFAULT_SHOW_WELCOME,
             last_terminal_layout: None,
             last_terminal_cell_metrics: None,
@@ -253,6 +262,7 @@ mod tests {
         assert_eq!(s.theme, AppTheme::default());
         assert!(s.enable_git_status);
         assert!(s.preload_tabs);
+        assert_eq!(s.tab_memory_limit_mb, DEFAULT_TAB_MEMORY_LIMIT_MB);
         assert_eq!(s.last_terminal_layout, None);
         assert_eq!(s.last_terminal_cell_metrics, None);
     }
@@ -294,6 +304,7 @@ mod tests {
         let s: Settings = serde_json::from_str(json).unwrap();
         assert!(!s.show_sidebar);
         assert!(s.show_fps);
+        assert_eq!(s.tab_memory_limit_mb, DEFAULT_TAB_MEMORY_LIMIT_MB);
         assert_eq!(s.agents[0].cmd, DEFAULT_AGENT_CMD);
     }
 

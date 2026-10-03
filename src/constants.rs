@@ -14,6 +14,9 @@ pub const MAX_AGENTS: usize = 4;
 pub const DEFAULT_PRELOAD_TABS: bool = true;
 pub const DEFAULT_SHOW_WELCOME: bool = true;
 
+/// Per-tab memory limit in MB: a tab whose process tree exceeds it is killed.
+pub const DEFAULT_TAB_MEMORY_LIMIT_MB: u64 = 12_000;
+
 /// How many recent projects to keep in the Projects menu.
 pub const RECENT_PROJECTS_LIMIT: usize = 20;
 

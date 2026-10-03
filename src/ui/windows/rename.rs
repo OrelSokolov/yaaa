@@ -14,6 +14,12 @@ impl super::WindowManager {
         self.show_missing_folder = true;
     }
 
+    /// Show the notice for a tab killed by the per-tab memory limit.
+    pub fn tab_killed(&mut self, limit_mb: u64) {
+        self.tab_killed_message = format!("Tab was killed as memory leak, limit {} MB", limit_mb);
+        self.show_tab_killed = true;
+    }
+
     pub(super) fn show_rename_group_window(&mut self, ctx: &egui::Context, actions: &mut WindowActions) {
         let mut should_save = false;
         let mut should_close = false;
@@ -90,6 +96,37 @@ impl super::WindowManager {
 
         if ok {
             self.show_missing_folder = false;
+        }
+    }
+
+    pub(super) fn show_tab_killed_window(&mut self, ctx: &egui::Context) {
+        let mut ok = false;
+
+        let window_id = egui::Id::new("tab_killed_window");
+
+        egui::Window::new("Tab killed")
+            .id(window_id)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut self.show_tab_killed)
+            .show(ctx, |ui| {
+                egui::Frame::NONE.inner_margin(20.0).show(ui, |ui| {
+                    ui.heading("Tab killed");
+                    ui.add_space(10.0);
+                    ui.label(&self.tab_killed_message);
+                    ui.add_space(15.0);
+                    if ui
+                        .add(egui::Button::new("OK").min_size(egui::vec2(80.0, 32.0)))
+                        .clicked()
+                        || (super::shortcuts_active(ctx, window_id)
+                            && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                    {
+                        ok = true;
+                    }
+                });
+            });
+
+        if ok {
+            self.show_tab_killed = false;
         }
     }
 

@@ -44,6 +44,17 @@ impl super::WindowManager {
 
                     ui.add_space(15.0);
 
+                    ui.horizontal(|ui| {
+                        ui.label("Tab memory limit:");
+                        ui.add(
+                            egui::DragValue::new(&mut self.editing_tab_memory_limit_mb)
+                                .range(1..=1_048_576)
+                                .suffix(" MB"),
+                        );
+                    });
+
+                    ui.add_space(15.0);
+
                     if super::shortcuts_active(ctx, window_id)
                         && ui.input(|i| i.key_pressed(egui::Key::Escape))
                     {
@@ -69,6 +80,7 @@ impl super::WindowManager {
             actions.run_as_login_shell = Some(self.editing_run_as_login_shell);
             actions.enable_git_status = Some(self.editing_enable_git_status);
             actions.preload_tabs = Some(self.editing_preload_tabs);
+            actions.tab_memory_limit_mb = Some(self.editing_tab_memory_limit_mb);
             actions.should_save_settings = true;
             self.show_settings = false;
         }

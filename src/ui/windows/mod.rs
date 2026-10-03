@@ -8,6 +8,7 @@ mod welcome;
 
 use crate::config::settings::{AgentConfig, MAX_AGENTS};
 use crate::config::TerminalLaunchConfig;
+use crate::constants::DEFAULT_TAB_MEMORY_LIMIT_MB;
 use crate::theme::{AppButtonStyle, AppFonts, AppTheme};
 
 pub struct WindowManager {
@@ -31,6 +32,8 @@ pub struct WindowManager {
     pub show_close_confirmation: bool,
     pub show_missing_folder: bool,
     pub missing_folder_message: String,
+    pub show_tab_killed: bool,
+    pub tab_killed_message: String,
     pub rename_group_id: Option<u64>,
     pub rename_group_name: String,
     // Draft state for the settings windows. Each draft is seeded from the
@@ -42,6 +45,7 @@ pub struct WindowManager {
     pub editing_run_as_login_shell: bool,
     pub editing_enable_git_status: bool,
     pub editing_preload_tabs: bool,
+    pub editing_tab_memory_limit_mb: u64,
     pub editing_theme: AppTheme,
     pub editing_fonts: AppFonts,
     pub was_settings_open: bool,
@@ -75,6 +79,8 @@ impl WindowManager {
             show_close_confirmation: false,
             show_missing_folder: false,
             missing_folder_message: String::new(),
+            show_tab_killed: false,
+            tab_killed_message: String::new(),
             rename_group_id: None,
             rename_group_name: String::new(),
             editing_default_shell_cmd: String::new(),
@@ -82,6 +88,7 @@ impl WindowManager {
             editing_run_as_login_shell: false,
             editing_enable_git_status: false,
             editing_preload_tabs: false,
+            editing_tab_memory_limit_mb: DEFAULT_TAB_MEMORY_LIMIT_MB,
             editing_theme: theme,
             editing_fonts,
             was_settings_open: false,
@@ -97,11 +104,13 @@ impl WindowManager {
         &mut self,
         launch: &TerminalLaunchConfig,
         enable_git_status: bool,
+        tab_memory_limit_mb: u64,
     ) {
         self.editing_default_shell_cmd = launch.default_shell_cmd.clone();
         self.editing_run_as_login_shell = launch.run_as_login_shell;
         self.editing_enable_git_status = enable_git_status;
         self.editing_preload_tabs = launch.preload_tabs;
+        self.editing_tab_memory_limit_mb = tab_memory_limit_mb;
     }
 
     /// Seed the agents draft from the owning launch config.
@@ -150,6 +159,7 @@ impl WindowManager {
         self.show_font_settings_window(ctx, &mut actions);
         self.show_close_confirmation_window(ctx, &mut actions);
         self.show_missing_folder_window(ctx);
+        self.show_tab_killed_window(ctx);
 
         actions
     }
@@ -171,6 +181,7 @@ pub struct WindowActions {    pub rename_group: Option<(u64, String)>,
     pub run_as_login_shell: Option<bool>,
     pub enable_git_status: Option<bool>,
     pub preload_tabs: Option<bool>,
+    pub tab_memory_limit_mb: Option<u64>,
     pub theme: Option<AppTheme>,
     pub fonts: Option<AppFonts>,
     pub welcome_sidebar: Option<bool>,

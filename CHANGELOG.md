@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Per-tab memory limit (default 12000 MB, configurable in Settings). Each frame the app sums the resident memory of every tab's process tree (shell + all descendants) from the cached process snapshot; when a tab exceeds the limit it is killed (dropping the terminal backend SIGKILLs its whole process group) and a "Tab was killed as memory leak, limit X MB" modal is shown. A limit of 0 in the settings file disables the check.
 - Font Settings: system font selection. The dialog now lists installed system fonts (via fontconfig) in two combo boxes — a proportional face for the UI and a monospace face for the terminal. Selected fonts are loaded from the system and placed at the front of the egui Proportional/Monospace families, persisted in settings, and honored at startup. "Default" keeps the embedded faces. The fontconfig cache is built once and shared between fallback loading, selection and the dialog listing. On macOS the selection is unavailable (fontconfig is skipped there) and the dialog says so.
 - Welcome window: a first-run overview of the main features (sidebar, agent buttons, git status, system monitor, hotkeys, search) with live on/off toggle buttons for the toggleable ones, a "Show this window at startup" toggle, and a Help → Welcome menu item to reopen it.
 
