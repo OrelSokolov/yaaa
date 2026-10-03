@@ -1,7 +1,7 @@
 # crosspack pipeline config — https://github.com/OrelSokolov/crosspack
 # Stages: crosspack deps <target> -> crosspack build <target> -> crosspack pack <target>
 name: h2term
-version: 0.6.6   # keep in sync with version in Cargo.toml
+version: 0.6.7   # keep in sync with version in Cargo.toml
 
 build:
   deps:
