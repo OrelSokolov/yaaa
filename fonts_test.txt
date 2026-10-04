@@ -76,5 +76,14 @@
 [20] Mixed inline
   Latin Кириллица 汉字 ひらがな 한글 Ελληνικά → ✓ ✅ 📂 EOF
 
+[21] Braille patterns (IRB logo, spinners)
+  ⢀⡴⠊⢉⡟⢿ ⣎⣀⣴⡋⡟⣻ ⣟⣼⣱⣽⣟⣾
+  ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏  ⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏
+
+[22] Nerd Font icons (starship / oh-my-zsh / eza)
+        ⭮⭯  ⫍⫎  ⏻
+
 If hanzi render as boxes (□), the CJK fallback is broken:
 see src/font_setup.rs, test font_setup::tests::cjk_fallback_provides_glyphs.
+If [21] or [22] render as boxes, the symbol fallbacks are broken:
+see src/font_setup.rs, test font_setup::tests::symbols_fonts_provide_braille_and_nerd_icons.

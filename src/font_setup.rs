@@ -17,6 +17,16 @@
 //!   Chinese face covers no hangul) and would be a fontconfig lottery.
 //!   Monospaced, so a CJK glyph is exactly two terminal cells wide and
 //!   grid borders line up.
+//! - `NotoSansSymbols2-Regular` — Braille Patterns (U+2800–U+28FF, the
+//!   full 256-glyph set: the IRB logo, CLI spinners, line drawing) plus
+//!   hundreds of misc symbols. Without it braille renders as tofu on
+//!   macOS, where fontconfig fallback is skipped and no embedded face
+//!   covers the range.
+//! - `SymbolsNerdFontMono-Regular` — the Nerd Fonts symbol-only face
+//!   (3.7k icon glyphs in the Private Use Area, all exactly 1 em wide):
+//!   the icons emitted by starship/oh-my-zsh/eza and friends. Embedded so
+//!   icon coverage does not depend on a Nerd Font happening to be
+//!   installed (the Linux fontconfig lottery) or impossible (macOS).
 //!
 //! On Linux we additionally query fontconfig for extra fallback fonts (Noto,
 //! DejaVu, emoji, ...), plus a CJK-capable font picked by glyph coverage as
@@ -61,6 +71,28 @@ const NOTO_SANS_MONO_CJK_SC_OTF: &[u8] =
 
 /// Name under which the embedded Noto Sans Mono CJK SC is registered in egui.
 const NOTO_SANS_MONO_CJK_FONT_NAME: &str = "NotoSansMonoCJKsc-Regular";
+
+/// Noto Sans Symbols 2 shipped in this repository (SIL OFL 1.1, see
+/// `assets/fonts/OFL-NotoSansSymbols2.txt`). The only embedded face with
+/// Braille Patterns coverage (all 256 glyphs of U+2800–U+28FF at a uniform
+/// advance), so braille art (IRB logo, CLI spinners) renders on every
+/// platform instead of tofu on macOS.
+const NOTO_SANS_SYMBOLS2_TTF: &[u8] = include_bytes!("../assets/fonts/NotoSansSymbols2-Regular.ttf");
+
+/// Name under which the embedded Noto Sans Symbols 2 is registered in egui.
+const NOTO_SANS_SYMBOLS2_FONT_NAME: &str = "NotoSansSymbols2-Regular";
+
+/// Nerd Fonts symbol-only mono face shipped in this repository (MIT, see
+/// `assets/fonts/LICENSE-SymbolsNerdFontMono.txt`). Covers the Nerd Fonts
+/// icon set in the Private Use Area (U+E000–U+F8FF) — starship/oh-my-zsh/
+/// eza icons, powerline arrows — with every glyph exactly 1 em wide, so
+/// icons take one terminal cell on every platform, whether or not a Nerd
+/// Font is installed.
+const SYMBOLS_NERD_FONT_MONO_TTF: &[u8] =
+    include_bytes!("../assets/fonts/SymbolsNerdFontMono-Regular.ttf");
+
+/// Name under which the embedded Nerd Fonts symbols face is registered in egui.
+const SYMBOLS_NERD_FONT_MONO_NAME: &str = "SymbolsNerdFontMono-Regular";
 
 /// Initialize fonts: embedded universal fallback everywhere, plus system
 /// fallback via fontconfig on platforms where it is useful. Selected system
@@ -118,6 +150,35 @@ pub fn apply_font_definitions(
         let list = fonts.families.entry(family).or_default();
         if !list.iter().any(|name| name == NOTO_SANS_MONO_CJK_FONT_NAME) {
             list.push(NOTO_SANS_MONO_CJK_FONT_NAME.to_owned());
+        }
+    }
+
+    // Braille Patterns + misc symbols: full 256-glyph braille block at a
+    // uniform advance (IRB logo, CLI spinners) and hundreds of symbols.
+    // Appended before any system fontconfig fallbacks so it wins for its
+    // codepoints on every platform.
+    fonts.font_data.insert(
+        NOTO_SANS_SYMBOLS2_FONT_NAME.to_owned(),
+        Arc::new(FontData::from_static(NOTO_SANS_SYMBOLS2_TTF)),
+    );
+    for family in [FontFamily::Monospace, FontFamily::Proportional] {
+        let list = fonts.families.entry(family).or_default();
+        if !list.iter().any(|name| name == NOTO_SANS_SYMBOLS2_FONT_NAME) {
+            list.push(NOTO_SANS_SYMBOLS2_FONT_NAME.to_owned());
+        }
+    }
+
+    // Nerd Fonts icons (Private Use Area) from starship/oh-my-zsh/eza and
+    // friends. Every glyph is exactly 1 em wide, so an icon is one terminal
+    // cell. Embedded instead of relying on a Nerd Font being installed.
+    fonts.font_data.insert(
+        SYMBOLS_NERD_FONT_MONO_NAME.to_owned(),
+        Arc::new(FontData::from_static(SYMBOLS_NERD_FONT_MONO_TTF)),
+    );
+    for family in [FontFamily::Monospace, FontFamily::Proportional] {
+        let list = fonts.families.entry(family).or_default();
+        if !list.iter().any(|name| name == SYMBOLS_NERD_FONT_MONO_NAME) {
+            list.push(SYMBOLS_NERD_FONT_MONO_NAME.to_owned());
         }
     }
 
@@ -468,6 +529,41 @@ mod tests {
 
         assert!(cjk_mono, "CJK missing in the monospace fallback");
         assert!(cjk_ui, "CJK missing in the proportional fallback");
+    }
+
+    /// Braille art (IRB logo, CLI spinners) and Nerd Font icons (Private
+    /// Use Area, starship/oh-my-zsh) must render, not turn into tofu. Both
+    /// ranges are embedded (see `NOTO_SANS_SYMBOLS2_FONT_NAME` and
+    /// `SYMBOLS_NERD_FONT_MONO_NAME`), so coverage holds on every platform —
+    /// including macOS, where the fontconfig fallback is skipped and no
+    /// system font would otherwise provide them.
+    #[test]
+    fn symbols_fonts_provide_braille_and_nerd_icons() {
+        let ctx = egui::Context::default();
+        apply_font_definitions(&ctx, None, None);
+        ctx.begin_pass(egui::RawInput::default());
+        let mono = egui::FontId::monospace(14.0);
+        let ui = egui::FontId::proportional(14.0);
+        // The IRB logo line and a spinner frame.
+        let braille = "⢀⡴⠊⢉⡟⢿ ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+        // Nerd Font icons: powerline arrow, folder, git branch, apple.
+        let icons = "\u{E0B0}\u{F07B}\u{E0A0}\u{F300}";
+        let braille_ok = ctx.fonts_mut(|f| {
+            f.has_glyphs(&mono, braille) && f.has_glyphs(&ui, braille)
+        });
+        let icons_ok = ctx.fonts_mut(|f| f.has_glyphs(&mono, icons) && f.has_glyphs(&ui, icons));
+        // Rasterize once so a broken font face would panic here, not in prod.
+        let _galley = ctx.fonts_mut(|f| {
+            f.layout_no_wrap(
+                format!("{braille} {icons}"),
+                mono.clone(),
+                egui::Color32::WHITE,
+            )
+        });
+        let _ = ctx.end_pass();
+
+        assert!(braille_ok, "braille missing in the symbol fallbacks");
+        assert!(icons_ok, "Nerd Font icons missing in the symbol fallbacks");
     }
 
     /// Selecting a system font must put it at the front of the target family
